@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Browzyan</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons" />
+  <script src="lib/Readability.js"></script>
+</head>
+<body>
+  <div class="browser-container">
+    <!-- Боковая панель -->
+    <div id="sidebar" class="sidebar">
+      <div class="sidebar-header">
+        <h3>Browzyan</h3>
+        <button id="closeSidebarButton" class="icon-button" title="Закрыть панель">✕</button>
+      </div>
+      
+      <div class="sidebar-section">
+        <h4>Закладки</h4>
+        <div id="bookmarksList" class="bookmarks-list"></div>
+      </div>
+      
+      <div class="sidebar-section">
+        <h4>Настройки</h4>
+        <div class="setting-item">
+          <span>Темная тема</span>
+          <label class="switch">
+            <input type="checkbox" id="darkModeToggle">
+            <span class="slider round"></span>
+          </label>
+        </div>
+        <div class="setting-item">
+          <span>Режим фокусировки</span>
+          <label class="switch">
+            <input type="checkbox" id="focusModeToggle">
+            <span class="slider round"></span>
+          </label>
+        </div>
+        <div class="setting-item">
+          <span>Блокировка рекламы</span>
+          <label class="switch">
+            <input type="checkbox" id="adBlockToggle">
+            <span class="slider round"></span>
+          </label>
+        </div>
+      </div>
+      
+      <!-- Настройки режима чтения -->
+      <div id="readerModeSettings" class="sidebar-section" style="display: none;">
+        <h4>Настройки режима чтения</h4>
+        <div class="reader-settings">
+          <div class="reader-setting-item">
+            <span>Размер шрифта</span>
+            <div class="font-size-controls">
+              <button id="decreaseFontButton" class="reader-btn">A-</button>
+              <button id="increaseFontButton" class="reader-btn">A+</button>
+            </div>
+          </div>
+          <div class="reader-setting-item">
+            <span>Цветовая схема</span>
+            <div class="color-scheme-controls">
+              <button id="lightThemeButton" class="reader-btn color-btn light-btn" title="Светлая тема"></button>
+              <button id="sepiaThemeButton" class="reader-btn color-btn sepia-btn" title="Сепия"></button>
+              <button id="darkThemeButton" class="reader-btn color-btn dark-btn" title="Темная тема"></button>
+            </div>
+          </div>
+          <div class="reader-setting-item">
+            <span>Ширина строки</span>
+            <input type="range" id="lineWidthRange" min="40" max="100" value="70" class="slider-range">
+          </div>
+          <div class="reader-setting-item">
+            <span>Межстрочный интервал</span>
+            <input type="range" id="lineHeightRange" min="1" max="2" step="0.1" value="1.5" class="slider-range">
+          </div>
+        </div>
+      </div>
+      
+      <div class="sidebar-section">
+        <h4>О браузере</h4>
+        <p class="sidebar-text">Browzyan - минималистичный браузер с фокусом на продуктивность и конфиденциальность.</p>
+        <p class="sidebar-version">Версия 0.0.1</p>
+      </div>
+    </div>
+
+    <!-- Панель загрузок - переместим ее СЮДА, вне main-content -->
+    <div id="downloadsPanel" class="downloads-panel">
+      <div class="downloads-header">
+        <h2>Загрузки</h2>
+        <button id="closeDownloadsButton" class="nav-button close-button" title="Закрыть">✕</button>
+      </div>
+      <div id="downloadsList" class="downloads-list">
+        <!-- Загрузки будут добавлены здесь динамически -->
+        <div class="no-downloads">У вас пока нет загрузок</div>
+      </div>
+    </div>
+
+    <!-- Основной контент -->
+    <div class="main-content">
+      <!-- Панель вкладок -->
+      <div class="tabs-container">
+        <div id="tabsList" class="tabs-list"></div>
+        <button id="newTabButton" class="tab-button" title="Новая вкладка">+</button>
+      </div>
+      
+      <!-- Панель адреса и навигации -->
+      <header class="browser-header">
+        <div class="navigation-buttons">
+          <button id="sidebarButton" class="nav-button" title="Боковая панель">☰</button>
+          <button id="backButton" class="nav-button" title="Назад">⬅</button>
+          <button id="forwardButton" class="nav-button" title="Вперед">➡</button>
+          <button id="refreshButton" class="nav-button" title="Обновить">🔄</button>
+        </div>
+        <div class="url-bar-container">
+          <form id="urlForm">
+            <input type="text" id="urlInput" placeholder="Введите URL или поисковый запрос...">
+            <button type="submit" id="goButton" title="Перейти">▶</button>
+          </form>
+        </div>
+        <div class="action-buttons">
+          <button id="bookmarkButton" class="nav-button" title="Добавить в закладки">★</button>
+          <button id="readerModeButton" class="nav-button" title="Режим чтения">📖</button>
+          <button id="downloadsButton" class="nav-button" title="Загрузки">⬇️</button>
+          <button id="focusModeButton" class="nav-button" title="Режим фокусировки">🔍</button>
+          <button id="themeButton" class="nav-button" title="Изменить тему">🌓</button>
+        </div>
+      </header>
+      
+      <!-- Режим чтения - отображается поверх BrowserView при активации -->
+      <div id="readerModeContainer" class="reader-mode-container">
+        <div class="reader-header">
+          <button id="closeReaderButton" class="nav-button" title="Закрыть режим чтения">✕</button>
+          <h1 id="readerTitle" class="reader-title"></h1>
+          <span id="readerDomain" class="reader-domain"></span>
+        </div>
+        <div id="readerContent" class="reader-content"></div>
+      </div>
+      
+      <!-- BrowserView будет отображаться ниже этого места -->
+    </div>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html> 

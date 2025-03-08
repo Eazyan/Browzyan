@@ -1,0 +1,41 @@
+{
+  "name": "browzyan",
+  "version": "0.0.1",
+  "description": "Browzyan - минималистичный браузер с фокусом на продуктивность",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "browser",
+    "electron",
+    "productivity",
+    "browzyan"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@cliqz/adblocker-electron": "^1.34.0",
+    "@mozilla/readability": "^0.6.0",
+    "axios": "^1.6.0",
+    "cross-fetch": "^3.2.0",
+    "electron": "^25.0.0",
+    "electron-builder": "^24.4.0",
+    "electron-store": "^8.2.0"
+  },
+  "build": {
+    "appId": "com.browzyan.app",
+    "productName": "Browzyan",
+    "mac": {
+      "category": "public.app-category.utilities"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
+  }
+}

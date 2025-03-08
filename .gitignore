@@ -1,0 +1,55 @@
+# Папки
+node_modules/
+dist/
+.DS_Store
+coverage/
+.vscode/
+.idea/
+.cache/
+out/
+build/
+.temp/
+.tmp/
+downloads/
+
+# Логи
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Файлы окружения и конфигурации
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.sublime-project
+*.sublime-workspace
+
+# Файлы пакетных менеджеров
+package-lock.json
+yarn.lock
+npm-debug.log
+yarn-error.log
+
+# Electron-специфичные
+.module-cache
+.electronlandbuilds
+electron-builder.yml
+
+# OS специфичные
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.directory
+.Trash-*
+
+# Временные файлы
+*.tmp
+*.swp
+*.swo 
