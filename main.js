@@ -400,59 +400,145 @@ function createTab(tabId, tabUrl) {
 
 // Активация вкладки
 function activateTab(tabId) {
-  if (!browserViews[tabId] || !mainWindow) return;
+  // Проверка параметров
+  if (!tabId || !browserViews[tabId] || !mainWindow || mainWindow.isDestroyed()) {
+    console.error('Ошибка активации вкладки:', { tabId, browserViewExists: !!browserViews[tabId], mainWindowExists: !!mainWindow });
+    return tabId;
+  }
 
-  // Устанавливаем BrowserView для окна
-  mainWindow.setBrowserView(browserViews[tabId]);
-  
-  // Обновляем активную вкладку
-  appState.activeTabId = tabId;
-  store.set('activeTabId', tabId);
-  
-  // Обновляем заголовок окна
-  const tabIndex = appState.tabs.findIndex(tab => tab.id === tabId);
-  if (tabIndex !== -1 && mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.setTitle(`${appState.tabs[tabIndex].title} - ${APP_NAME}`);
+  try {
+    // Проверяем, не активна ли уже эта вкладка
+    if (appState.activeTabId === tabId) {
+      console.log(`Вкладка ${tabId} уже активна`);
+      // Обновляем размеры, на случай изменения размера окна
+      updateBrowserViewBounds(tabId);
+      return tabId;
+    }
+    
+    // Получаем текущую активную вкладку и сохраняем ее состояние
+    const previousTabId = appState.activeTabId;
+    
+    // Устанавливаем BrowserView для окна с защитой от ошибок
+    try {
+      mainWindow.setBrowserView(browserViews[tabId]);
+    } catch (err) {
+      console.error('Ошибка при установке BrowserView:', err);
+      // Пробуем восстановить предыдущую вкладку
+      if (previousTabId && browserViews[previousTabId]) {
+        mainWindow.setBrowserView(browserViews[previousTabId]);
+      }
+      return previousTabId;
+    }
+    
+    // Обновляем активную вкладку
+    appState.activeTabId = tabId;
+    store.set('activeTabId', tabId);
+    
+    // Обновляем заголовок окна
+    const tabIndex = appState.tabs.findIndex(tab => tab.id === tabId);
+    if (tabIndex !== -1 && mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.setTitle(`${appState.tabs[tabIndex].title} - ${APP_NAME}`);
+    }
+    
+    // Обновляем размеры и позицию BrowserView
+    updateBrowserViewBounds(tabId);
+    
+    // Отправляем сообщение о смене вкладки
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('tab-changed', tabId);
+    }
+    
+    console.log(`Активирована вкладка ${tabId}`);
+    return tabId;
+  } catch (error) {
+    console.error('Непредвиденная ошибка при активации вкладки:', error);
+    return appState.activeTabId;
   }
-  
-  // Обновляем размеры и позицию BrowserView
-  updateBrowserViewBounds(tabId);
-  
-  // Отправляем сообщение о смене вкладки
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('tab-changed', tabId);
-  }
-  
-  return tabId;
 }
 
 // Закрытие вкладки
 function closeTab(tabId) {
-  if (!browserViews[tabId]) return;
-  
-  // Удаляем BrowserView
-  const view = browserViews[tabId];
-  delete browserViews[tabId];
-  view.webContents.destroy();
-  
-  // Удаляем из списка вкладок
-  appState.tabs = appState.tabs.filter(tab => tab.id !== tabId);
-  store.set('tabs', appState.tabs);
-  
-  // Если закрыли активную вкладку, активируем другую
-  if (appState.activeTabId === tabId && appState.tabs.length > 0) {
-    activateTab(appState.tabs[0].id);
-  } else if (appState.tabs.length === 0) {
-    // Если нет вкладок, создаем новую
-    const newTabId = createTab(nextTabId++, DEFAULT_SEARCH_URL);
-    activateTab(newTabId);
-    
-    // Добавляем в список вкладок
-    appState.tabs.push({ id: newTabId, url: DEFAULT_SEARCH_URL, title: 'Яндекс' });
-    store.set('tabs', appState.tabs);
+  // Проверка параметров
+  if (!tabId || !browserViews[tabId]) {
+    console.error('Ошибка закрытия вкладки: вкладка не найдена', tabId);
+    return appState.tabs;
   }
   
-  return appState.tabs;
+  try {
+    // Если это активная вкладка, сначала активируем другую
+    const isActiveTab = appState.activeTabId === tabId;
+    
+    // Найдем индекс в массиве вкладок
+    const tabIndex = appState.tabs.findIndex(tab => tab.id === tabId);
+    if (tabIndex === -1) {
+      console.error('Ошибка закрытия вкладки: вкладка не найдена в списке', tabId);
+      return appState.tabs;
+    }
+    
+    // Находим новую вкладку для активации, если закрываем активную
+    let newActiveTabId = appState.activeTabId;
+    if (isActiveTab) {
+      // Пытаемся активировать предыдущую вкладку в списке
+      if (tabIndex > 0) {
+        newActiveTabId = appState.tabs[tabIndex - 1].id;
+      } 
+      // Если нет предыдущей, то пытаемся активировать следующую
+      else if (tabIndex < appState.tabs.length - 1) {
+        newActiveTabId = appState.tabs[tabIndex + 1].id;
+      } 
+      // Если нет других вкладок, будет null
+      else {
+        newActiveTabId = null;
+      }
+      
+      // Если будет новая активная вкладка, активируем ее
+      if (newActiveTabId !== null && browserViews[newActiveTabId]) {
+        try {
+          mainWindow.setBrowserView(browserViews[newActiveTabId]);
+        } catch (error) {
+          console.error('Ошибка при смене активной вкладки:', error);
+        }
+      }
+    }
+    
+    // Удаляем BrowserView
+    try {
+      const view = browserViews[tabId];
+      delete browserViews[tabId];
+      
+      // Безопасное уничтожение webContents
+      if (view && view.webContents && !view.webContents.isDestroyed()) {
+        view.webContents.destroy();
+      }
+    } catch (error) {
+      console.error('Ошибка при удалении BrowserView:', error);
+    }
+    
+    // Удаляем из списка вкладок
+    appState.tabs = appState.tabs.filter(tab => tab.id !== tabId);
+    store.set('tabs', appState.tabs);
+    
+    // Обрабатываем случай, когда были закрыты все вкладки
+    if (appState.tabs.length === 0) {
+      // Если нет вкладок, создаем новую
+      const newTabId = createTab(nextTabId++, DEFAULT_SEARCH_URL);
+      appState.tabs.push({ id: newTabId, url: DEFAULT_SEARCH_URL, title: 'Новая вкладка' });
+      store.set('tabs', appState.tabs);
+      
+      // Активируем новую вкладку
+      activateTab(newTabId);
+    } 
+    // Если мы закрыли активную вкладку, активируем выбранную новую
+    else if (isActiveTab && newActiveTabId !== null) {
+      activateTab(newActiveTabId);
+    }
+    
+    console.log(`Закрыта вкладка ${tabId}, осталось ${appState.tabs.length} вкладок`);
+    return appState.tabs;
+  } catch (error) {
+    console.error('Непредвиденная ошибка при закрытии вкладки:', error);
+    return appState.tabs;
+  }
 }
 
 // Обновление границ browserView в зависимости от видимости боковой панели и других элементов
@@ -557,42 +643,108 @@ ipcMain.handle('get-default-search', () => {
 
 // Обработчики вкладок
 ipcMain.handle('open-tab', async (event, url) => {
-  const tabId = nextTabId++;
-  createTab(tabId, url || DEFAULT_SEARCH_URL);
-  
-  // Добавляем в список вкладок
-  appState.tabs.push({ id: tabId, url: url || DEFAULT_SEARCH_URL, title: 'Новая вкладка' });
-  store.set('tabs', appState.tabs);
-  
-  // Активируем новую вкладку
-  activateTab(tabId);
-  
-  return { id: tabId, tabs: appState.tabs };
+  try {
+    const tabId = nextTabId++;
+    
+    console.log(`Открываем новую вкладку ${tabId} с URL: ${url || DEFAULT_SEARCH_URL}`);
+    
+    // Создаем BrowserView для вкладки
+    createTab(tabId, url || DEFAULT_SEARCH_URL);
+    
+    // Добавляем в список вкладок
+    appState.tabs.push({ id: tabId, url: url || DEFAULT_SEARCH_URL, title: 'Новая вкладка' });
+    store.set('tabs', appState.tabs);
+    
+    // Активируем новую вкладку
+    activateTab(tabId);
+    
+    return { id: tabId, tabs: appState.tabs };
+  } catch (error) {
+    console.error('Ошибка при открытии вкладки:', error);
+    return { error: 'Failed to open tab', tabs: appState.tabs };
+  }
 });
 
 ipcMain.handle('close-tab', async (event, tabId) => {
-  const tabs = closeTab(tabId);
-  return { activeTabId: appState.activeTabId, tabs };
+  try {
+    if (!tabId || typeof tabId !== 'number') {
+      console.error('Некорректный tabId в close-tab:', tabId);
+      return { error: 'Invalid tabId', activeTabId: appState.activeTabId, tabs: appState.tabs };
+    }
+    
+    console.log(`Закрываем вкладку ${tabId}`);
+    
+    // Закрываем вкладку
+    const tabs = closeTab(tabId);
+    
+    return { activeTabId: appState.activeTabId, tabs };
+  } catch (error) {
+    console.error('Ошибка при закрытии вкладки:', error);
+    return { error: 'Failed to close tab', activeTabId: appState.activeTabId, tabs: appState.tabs };
+  }
 });
 
 ipcMain.handle('switch-tab', async (event, tabId) => {
-  activateTab(tabId);
-  return { activeTabId: appState.activeTabId, tabs: appState.tabs };
+  try {
+    if (!tabId || typeof tabId !== 'number') {
+      console.error('Некорректный tabId в switch-tab:', tabId);
+      return { error: 'Invalid tabId', activeTabId: appState.activeTabId, tabs: appState.tabs };
+    }
+    
+    console.log(`Переключаемся на вкладку ${tabId}`);
+    
+    // Проверяем существование вкладки
+    if (!browserViews[tabId]) {
+      console.error(`Вкладка ${tabId} не существует`);
+      return { error: 'Tab not found', activeTabId: appState.activeTabId, tabs: appState.tabs };
+    }
+    
+    // Активируем вкладку
+    activateTab(tabId);
+    
+    return { activeTabId: appState.activeTabId, tabs: appState.tabs };
+  } catch (error) {
+    console.error('Ошибка при переключении вкладки:', error);
+    return { error: 'Failed to switch tab', activeTabId: appState.activeTabId, tabs: appState.tabs };
+  }
 });
 
 ipcMain.handle('get-tabs', async () => {
-  return { activeTabId: appState.activeTabId, tabs: appState.tabs };
+  try {
+    return { activeTabId: appState.activeTabId, tabs: appState.tabs };
+  } catch (error) {
+    console.error('Ошибка при получении списка вкладок:', error);
+    return { error: 'Failed to get tabs', activeTabId: appState.activeTabId, tabs: [] };
+  }
 });
 
 ipcMain.handle('reorder-tabs', async (event, fromIndex, toIndex) => {
-  // Переупорядочиваем вкладки в состоянии
-  const tab = appState.tabs.splice(fromIndex, 1)[0];
-  appState.tabs.splice(toIndex, 0, tab);
-  
-  // Сохраняем изменения
-  store.set('tabs', appState.tabs);
-  
-  return { tabs: appState.tabs };
+  try {
+    if (typeof fromIndex !== 'number' || typeof toIndex !== 'number') {
+      console.error('Некорректные параметры в reorder-tabs:', { fromIndex, toIndex });
+      return { error: 'Invalid parameters', tabs: appState.tabs };
+    }
+    
+    // Проверяем, что индексы в допустимом диапазоне
+    if (fromIndex < 0 || fromIndex >= appState.tabs.length || toIndex < 0 || toIndex >= appState.tabs.length) {
+      console.error('Индексы вне допустимого диапазона:', { fromIndex, toIndex, tabsLength: appState.tabs.length });
+      return { error: 'Index out of range', tabs: appState.tabs };
+    }
+    
+    console.log(`Перемещаем вкладку с позиции ${fromIndex} на позицию ${toIndex}`);
+    
+    // Переупорядочиваем вкладки в состоянии
+    const tab = appState.tabs.splice(fromIndex, 1)[0];
+    appState.tabs.splice(toIndex, 0, tab);
+    
+    // Сохраняем изменения
+    store.set('tabs', appState.tabs);
+    
+    return { tabs: appState.tabs };
+  } catch (error) {
+    console.error('Ошибка при изменении порядка вкладок:', error);
+    return { error: 'Failed to reorder tabs', tabs: appState.tabs };
+  }
 });
 
 // Методы блокировки рекламы

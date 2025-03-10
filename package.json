@@ -1,6 +1,6 @@
 {
   "name": "browzyan",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Browzyan - минималистичный браузер с фокусом на продуктивность",
   "main": "main.js",
   "scripts": {

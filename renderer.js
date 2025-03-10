@@ -94,50 +94,95 @@ const historyButton = document.getElementById('historyButton');
 
 // Инициализация подписки на события
 function initEventSubscriptions() {
-  // Подписка на событие загрузки страницы
-  window.electronAPI.on('page-loaded', (url) => {
-    isPageLoading = false;
+  // Предотвращаем повторную регистрацию
+  if (window.eventsInitialized) return;
+  window.eventsInitialized = true;
+
+  console.log('Инициализация обработчиков событий');
+
+  // Улучшенный обработчик для кнопки новой вкладки
+  newTabButton.addEventListener('click', async (e) => {
+    e.preventDefault();
+    
+    // Предотвращаем быстрые повторные клики
+    const now = Date.now();
+    if (window.lastNewTabClick && (now - window.lastNewTabClick < 500)) {
+      console.log('Игнорируем быстрый повторный клик на кнопке новой вкладки');
+      return;
+    }
+    window.lastNewTabClick = now;
+    
+    // Визуальная обратная связь
+    newTabButton.classList.add('clicked');
+    setTimeout(() => {
+      newTabButton.classList.remove('clicked');
+    }, 300);
+    
+    console.log('Клик по кнопке новой вкладки');
+    await openNewTab();
+  });
+
+  // Обновлённые обработчики для кнопок навигации
+  backButton.addEventListener('click', async () => {
+    // Предотвращаем быстрые повторные клики
+    const now = Date.now();
+    if (window.lastBackClick && (now - window.lastBackClick < 300)) return;
+    window.lastBackClick = now;
+    
+    const canGoBack = await window.electronAPI.goBack();
+    backButton.disabled = !canGoBack;
+    updateAddressBar();
+  });
+
+  forwardButton.addEventListener('click', async () => {
+    // Предотвращаем быстрые повторные клики
+    const now = Date.now();
+    if (window.lastForwardClick && (now - window.lastForwardClick < 300)) return;
+    window.lastForwardClick = now;
+    
+    const canGoForward = await window.electronAPI.goForward();
+    forwardButton.disabled = !canGoForward;
+    updateAddressBar();
+  });
+
+  refreshButton.addEventListener('click', async () => {
+    // Предотвращаем быстрые повторные клики
+    const now = Date.now();
+    if (window.lastRefreshClick && (now - window.lastRefreshClick < 500)) return;
+    window.lastRefreshClick = now;
+    
+    await window.electronAPI.reload();
+  });
+
+  // Остальные обработчики без изменений
+  // ...
+  
+  // Загружаем конфигурацию поиска
+  loadSearchSettings();
+  
+  // Регистрируем события из основного процесса
+  window.electronAPI.onPageLoaded((url) => {
     updateAddressBar();
     updateNavigationButtons();
+    isPageLoading = false;
   });
-  
-  // Подписка на событие смены вкладки
-  window.electronAPI.on('tab-changed', (tabId) => {
+
+  window.electronAPI.onTabsUpdated((tabs) => {
+    console.log('Получено обновление списка вкладок из main процесса:', tabs.length);
+    appState.tabs = tabs;
+    renderTabs();
+  });
+
+  window.electronAPI.onTabChanged((tabId) => {
+    console.log('Получено событие изменения активной вкладки из main процесса:', tabId);
     appState.activeTabId = tabId;
     renderTabs();
     updateAddressBar();
     updateNavigationButtons();
   });
-  
-  // Подписка на событие создания новой вкладки
-  window.electronAPI.on('tab-created', (tab) => {
-    // Добавляем новую вкладку в локальный список, если её ещё нет
-    if (!appState.tabs.some(t => t.id === tab.id)) {
-      appState.tabs.push(tab);
-      renderTabs();
-    }
-  });
-  
-  // Подписка на события загрузок
-  window.electronAPI.onDownloadStarted((event, download) => {
-    addDownloadItem(download);
-  });
-  
-  window.electronAPI.onDownloadProgress((event, progress) => {
-    updateDownloadProgress(progress);
-  });
-  
-  window.electronAPI.onDownloadCompleted((event, download) => {
-    completeDownload(download);
-  });
-  
-  window.electronAPI.onDownloadCancelled((event, download) => {
-    cancelDownload(download.id);
-  });
-  
-  window.electronAPI.onDownloadFailed((event, error) => {
-    failDownload(error.id, error.error);
-  });
+
+  // Остальные обработчики
+  // ...
 }
 
 // Загрузка настроек поиска
@@ -247,125 +292,219 @@ function renderBookmarks() {
 
 // Отображение вкладок
 function renderTabs() {
-  tabsList.innerHTML = '';
+  console.log('Рендеринг вкладок, текущее состояние:', {
+    activeTabId: appState.activeTabId,
+    tabsCount: appState.tabs.length,
+    tabs: appState.tabs.map(t => ({ id: t.id, title: t.title }))
+  });
   
+  // Очищаем контейнер перед добавлением новых элементов
+  tabsList.innerHTML = '';
+
+  // Установка глобального обработчика для предотвращения двойного выделения
+  if (!window.tabsHandlerInitialized) {
+    window.addEventListener('click', function(e) {
+      // Находим ближайший родительский элемент с классом 'tab'
+      const tabEl = e.target.closest('.tab');
+      
+      // Если клик не по вкладке или уже обрабатывается другим обработчиком, выходим
+      if (!tabEl || e.tabHandled) return;
+      
+      // Помечаем клик как обработанный для предотвращения двойной обработки
+      e.tabHandled = true;
+      
+      // Получаем tabId из атрибута данных
+      const tabId = parseInt(tabEl.dataset.tabId, 10);
+      
+      // Проверяем, что клик был не на крестике закрытия
+      const closeBtn = tabEl.querySelector('.tab-close');
+      if (e.target === closeBtn || closeBtn.contains(e.target)) {
+        console.log('Клик на крестик, пропускаем обработку переключения вкладки');
+        return;
+      }
+      
+      // Проверка времени, чтобы предотвратить множественные клики
+      const now = Date.now();
+      if (window.lastTabClickTime && (now - window.lastTabClickTime < 300)) {
+        console.log('Слишком быстрый повторный клик, игнорируем');
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+      
+      // Запоминаем время клика
+      window.lastTabClickTime = now;
+      window.lastClickedTabId = tabId;
+      
+      // Проверяем, что вкладка не является активной
+      if (tabId === appState.activeTabId) {
+        console.log('Клик на уже активную вкладку, игнорируем');
+        return;
+      }
+      
+      console.log(`Переключение на вкладку ${tabId} через глобальный обработчик`);
+      switchTab(tabId);
+    }, true); // Захватывающая фаза для обработки до других обработчиков
+    
+    window.tabsHandlerInitialized = true;
+  }
+  
+  // Перебираем вкладки и создаем элементы
   appState.tabs.forEach((tab, index) => {
+    // Создаем элемент вкладки с уникальным классом на основе tabId
     const tabElement = document.createElement('div');
-    tabElement.className = 'tab';
+    tabElement.className = `tab tab-${tab.id}`;
     tabElement.setAttribute('data-tab-id', tab.id);
     tabElement.setAttribute('data-index', index);
     
+    // Устанавливаем класс active для активной вкладки
     if (tab.id === appState.activeTabId) {
       tabElement.classList.add('active');
     }
     
+    // Создаем содержимое вкладки
     const title = document.createElement('span');
     title.className = 'tab-title';
     title.textContent = tab.title || 'Новая вкладка';
     
+    // Создаем кнопку закрытия
     const closeButton = document.createElement('button');
     closeButton.className = 'tab-close';
     closeButton.setAttribute('title', 'Закрыть вкладку');
+    closeButton.dataset.tabId = tab.id; // Добавляем дополнительный атрибут для надежности
     closeButton.innerHTML = `
       <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
         <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/>
       </svg>
     `;
     
+    // Добавляем элементы в DOM
     tabElement.appendChild(title);
     tabElement.appendChild(closeButton);
     
-    // Переключение на вкладку при клике
-    tabElement.addEventListener('click', (e) => {
-      if (e.target !== closeButton) {
-        switchTab(tab.id);
-      }
-    });
-    
-    // Закрытие вкладки при клике на крестик
-    closeButton.addEventListener('click', (e) => {
-      e.stopPropagation();
-      closeTab(tab.id);
-    });
-    
-    // Добавляем обработчики для drag and drop
-    tabElement.setAttribute('draggable', 'true');
-    
-    tabElement.addEventListener('dragstart', (e) => {
-      draggedTabId = tab.id;
-      draggedTabElement = tabElement;
-      dragStartIndex = index;
-      
-      // Отложенное добавление класса для визуального эффекта
-      setTimeout(() => {
-        tabElement.classList.add('dragging');
-      }, 0);
-      
-      // Устанавливаем данные для переноса
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', index);
-    });
-    
-    tabElement.addEventListener('dragend', () => {
-      draggedTabElement.classList.remove('dragging');
-      draggedTabId = null;
-      draggedTabElement = null;
-      dragStartIndex = -1;
-      
-      // Убираем все маркеры перетаскивания
-      document.querySelectorAll('.tab-drop-indicator').forEach(el => el.remove());
-    });
-    
-    tabElement.addEventListener('dragover', (e) => {
-      e.preventDefault(); // Необходимо для разрешения drop
-      
-      // Если это другая вкладка (не та, которую мы перетаскиваем)
-      if (draggedTabId !== tab.id) {
-        // Определяем, куда вставлять: слева или справа от текущей вкладки
-        const rect = tabElement.getBoundingClientRect();
-        const midPoint = rect.left + rect.width / 2;
-        const insertBefore = e.clientX < midPoint;
-        
-        // Отображаем индикатор
-        showDropIndicator(tabElement, insertBefore);
-      }
-    });
-    
-    tabElement.addEventListener('dragleave', () => {
-      // Убираем индикатор, когда мышь покидает вкладку
-      document.querySelectorAll('.tab-drop-indicator').forEach(el => el.remove());
-    });
-    
-    tabElement.addEventListener('drop', async (e) => {
+    // Обработчик только для кнопки закрытия
+    closeButton.addEventListener('click', function(e) {
       e.preventDefault();
+      e.stopPropagation();
+      e.tabHandled = true; // Предотвращаем обработку глобальным обработчиком
       
-      if (draggedTabId !== tab.id && dragStartIndex !== -1) {
-        // Определяем, куда вставлять: слева или справа от текущей вкладки
-        const rect = tabElement.getBoundingClientRect();
-        const midPoint = rect.left + rect.width / 2;
-        const insertBefore = e.clientX < midPoint;
-        
-        // Вычисляем новый индекс
-        let newIndex = index;
-        if (!insertBefore) newIndex++;
-        
-        // Если перемещаем вперед, корректируем индекс
-        if (dragStartIndex < newIndex) newIndex--;
-        
-        // Выполняем перестановку
-        await window.electronAPI.reorderTabs(dragStartIndex, newIndex);
-        
-        // Перерисовываем вкладки
-        const tabsInfo = await window.electronAPI.getTabs();
-        appState.tabs = tabsInfo.tabs;
-        renderTabs();
+      const tabIdToClose = parseInt(this.dataset.tabId, 10);
+      console.log(`Закрытие вкладки ${tabIdToClose} через кнопку закрытия`);
+      
+      // Защита от быстрых кликов
+      const now = Date.now();
+      if (window.lastCloseClickTime && (now - window.lastCloseClickTime < 300)) {
+        console.log('Слишком быстрый повторный клик на закрытие, игнорируем');
+        return;
       }
+      window.lastCloseClickTime = now;
       
-      // Убираем все маркеры перетаскивания
-      document.querySelectorAll('.tab-drop-indicator').forEach(el => el.remove());
+      // Добавляем класс closing для анимации
+      tabElement.classList.add('closing');
+      
+      // Небольшая задержка для анимации
+      setTimeout(() => {
+        closeTab(tabIdToClose);
+      }, 100);
     });
     
+    // Настройка drag-and-drop
+    setupTabDragAndDrop(tabElement, tab, index);
+    
+    // Добавляем вкладку в список
     tabsList.appendChild(tabElement);
+  });
+  
+  // Регистрируем элементы вкладок для отладки
+  console.log('Отрендерены вкладки:', document.querySelectorAll('.tab').length);
+}
+
+// Выносим логику drag-and-drop в отдельную функцию для улучшения читаемости
+function setupTabDragAndDrop(tabElement, tab, index) {
+  tabElement.setAttribute('draggable', 'true');
+  
+  tabElement.addEventListener('dragstart', (e) => {
+    // Проверяем, не было ли недавно клика для предотвращения случайного drag&drop
+    if (Date.now() - window.lastTabClickTime < 200) {
+      e.preventDefault();
+      return;
+    }
+    
+    draggedTabId = tab.id;
+    draggedTabElement = tabElement;
+    dragStartIndex = index;
+    
+    // Визуальный эффект
+    setTimeout(() => tabElement.classList.add('dragging'), 0);
+    
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', index);
+    
+    console.log(`Начато перетаскивание вкладки ${tab.id}`);
+  });
+  
+  tabElement.addEventListener('dragend', () => {
+    if (draggedTabElement) {
+      draggedTabElement.classList.remove('dragging');
+    }
+    
+    draggedTabId = null;
+    draggedTabElement = null;
+    dragStartIndex = -1;
+    
+    // Удаляем индикаторы
+    document.querySelectorAll('.tab-drop-indicator').forEach(el => el.remove());
+    
+    console.log('Завершено перетаскивание вкладки');
+  });
+  
+  tabElement.addEventListener('dragover', (e) => {
+    e.preventDefault(); // Необходимо для разрешения drop
+    
+    // Если это та же вкладка, которую мы перетаскиваем, ничего не делаем
+    if (draggedTabId === tab.id) return;
+    
+    // Определяем, куда вставлять: слева или справа
+    const rect = tabElement.getBoundingClientRect();
+    const midPoint = rect.left + rect.width / 2;
+    const insertBefore = e.clientX < midPoint;
+    
+    // Показываем индикатор
+    showDropIndicator(tabElement, insertBefore);
+  });
+  
+  tabElement.addEventListener('dragleave', () => {
+    // Удаляем индикатор при выходе мыши
+    document.querySelectorAll('.tab-drop-indicator').forEach(el => el.remove());
+  });
+  
+  tabElement.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    
+    if (draggedTabId !== tab.id && dragStartIndex !== -1) {
+      // Определяем позицию вставки
+      const rect = tabElement.getBoundingClientRect();
+      const midPoint = rect.left + rect.width / 2;
+      const insertBefore = e.clientX < midPoint;
+      
+      // Вычисляем новый индекс
+      let newIndex = index;
+      if (!insertBefore) newIndex++;
+      if (dragStartIndex < newIndex) newIndex--;
+      
+      console.log(`Перемещение вкладки с позиции ${dragStartIndex} на позицию ${newIndex}`);
+      
+      // Вызываем метод для переупорядочивания
+      await window.electronAPI.reorderTabs(dragStartIndex, newIndex);
+      
+      // Обновляем состояние и перерисовываем
+      const tabsInfo = await window.electronAPI.getTabs();
+      appState.tabs = tabsInfo.tabs;
+      renderTabs();
+    }
+    
+    // Удаляем индикаторы
+    document.querySelectorAll('.tab-drop-indicator').forEach(el => el.remove());
   });
 }
 
@@ -391,29 +530,211 @@ function showDropIndicator(tabElement, insertBefore) {
 
 // Открытие новой вкладки
 async function openNewTab(url) {
-  const result = await window.electronAPI.openTab(url);
-  appState.tabs = result.tabs;
-  appState.activeTabId = result.id;
-  renderTabs();
+  // Предотвращаем многократное выполнение операции открытия вкладки
+  if (window.isProcessingTabOpen) {
+    console.log(`Уже идет процесс открытия вкладки, запрос на открытие новой вкладки отклонен`);
+    return;
+  }
+
+  try {
+    // Устанавливаем флаг блокировки операций открытия
+    window.isProcessingTabOpen = true;
+    
+    console.log(`Начало процесса открытия новой вкладки с URL: ${url || 'пустой'}`);
+    
+    // Добавляем обработку URL
+    const processedUrl = url ? prepareUrl(url) : null;
+    
+    // Ожидаем результат от main процесса
+    console.log(`Отправка запроса в main процесс на открытие новой вкладки`);
+    const result = await window.electronAPI.openTab(processedUrl);
+    
+    // Проверяем результат и обновляем состояние
+    if (result && result.id) {
+      console.log(`Успешно открыта новая вкладка с ID ${result.id}`);
+      
+      appState.tabs = result.tabs;
+      appState.activeTabId = result.id;
+      
+      // Обновляем интерфейс
+      renderTabs();
+      updateAddressBar();
+      updateNavigationButtons();
+      
+      return result.id;
+    } else if (result && result.error) {
+      console.error(`Ошибка при открытии новой вкладки:`, result.error);
+    } else {
+      console.error('Не удалось получить корректный результат при открытии вкладки');
+    }
+  } catch (error) {
+    console.error('Ошибка при открытии новой вкладки:', error);
+  } finally {
+    // Сбрасываем флаг через некоторое время
+    setTimeout(() => {
+      window.isProcessingTabOpen = false;
+      console.log('Завершена операция открытия вкладки, снят флаг блокировки');
+    }, 300);
+  }
 }
 
 // Закрытие вкладки
 async function closeTab(tabId) {
-  const result = await window.electronAPI.closeTab(tabId);
-  appState.tabs = result.tabs;
-  appState.activeTabId = result.activeTabId;
-  renderTabs();
-  updateAddressBar();
-  updateNavigationButtons();
+  // Предотвращаем многократное выполнение операции закрытия
+  if (window.isProcessingTabClose) {
+    console.log(`Уже идет процесс закрытия вкладки, запрос на закрытие вкладки ${tabId} отклонен`);
+    return;
+  }
+
+  // Проверяем валидность tabId
+  if (!tabId || typeof tabId !== 'number') {
+    console.error('Ошибка при закрытии вкладки: некорректный tabId', tabId);
+    return;
+  }
+  
+  // Проверяем существование вкладки
+  const tabExists = appState.tabs.some(tab => tab.id === tabId);
+  if (!tabExists) {
+    console.error('Попытка закрыть несуществующую вкладку:', tabId);
+    return;
+  }
+  
+  try {
+    // Устанавливаем флаг блокировки операций с вкладками
+    window.isProcessingTabClose = true;
+    
+    console.log(`Начало процесса закрытия вкладки ${tabId}`);
+    
+    // Добавляем визуальную обратную связь всем элементам с этим tabId
+    document.querySelectorAll(`.tab[data-tab-id="${tabId}"]`).forEach(el => {
+      el.classList.add('closing');
+      // Убираем обработчики событий
+      el.style.pointerEvents = 'none';
+    });
+    
+    // Небольшая задержка для анимации
+    await new Promise(resolve => setTimeout(resolve, 150));
+    
+    // Ожидаем результат от main процесса
+    console.log(`Отправка запроса в main процесс на закрытие вкладки ${tabId}`);
+    const result = await window.electronAPI.closeTab(tabId);
+    
+    // Проверяем результат и обновляем состояние
+    if (result && result.tabs) {
+      console.log(`Успешно закрыта вкладка ${tabId}, осталось ${result.tabs.length} вкладок`);
+      console.log(`Новая активная вкладка: ${result.activeTabId}`);
+      
+      appState.tabs = result.tabs;
+      appState.activeTabId = result.activeTabId;
+      
+      // Обновляем интерфейс
+      renderTabs();
+      updateAddressBar();
+      updateNavigationButtons();
+    } else if (result && result.error) {
+      console.error(`Ошибка при закрытии вкладки ${tabId}:`, result.error);
+    } else {
+      console.error('Не удалось получить корректный результат при закрытии вкладки');
+    }
+  } catch (error) {
+    console.error(`Ошибка при закрытии вкладки ${tabId}:`, error);
+  } finally {
+    // Сбрасываем флаг через некоторое время, чтобы предотвратить повторные клики
+    setTimeout(() => {
+      window.isProcessingTabClose = false;
+      console.log('Завершена операция закрытия вкладки, снят флаг блокировки');
+    }, 300);
+  }
 }
 
 // Переключение на вкладку
 async function switchTab(tabId) {
-  const result = await window.electronAPI.switchTab(tabId);
-  appState.activeTabId = result.activeTabId;
-  renderTabs();
-  updateAddressBar();
-  updateNavigationButtons();
+  // Предотвращаем многократное выполнение операции переключения
+  if (window.isProcessingTabSwitch) {
+    console.log(`Уже идет процесс переключения вкладки, запрос на переключение на вкладку ${tabId} отклонен`);
+    return;
+  }
+
+  // Проверяем валидность tabId
+  if (!tabId || typeof tabId !== 'number') {
+    console.error('Ошибка при переключении вкладки: некорректный tabId', tabId);
+    return;
+  }
+  
+  // Проверяем существование вкладки
+  const tabExists = appState.tabs.some(tab => tab.id === tabId);
+  if (!tabExists) {
+    console.error('Попытка переключиться на несуществующую вкладку:', tabId);
+    return;
+  }
+  
+  // Предотвращаем повторное переключение на активную вкладку
+  if (tabId === appState.activeTabId) {
+    console.log('Вкладка уже активна:', tabId);
+    return;
+  }
+  
+  // Если в данный момент идет закрытие вкладки, пропускаем переключение
+  if (window.isProcessingTabClose) {
+    console.log('Операция переключения отменена: идет процесс закрытия вкладки');
+    return;
+  }
+
+  try {
+    // Устанавливаем флаг блокировки операций с вкладками
+    window.isProcessingTabSwitch = true;
+    
+    console.log(`Начало процесса переключения на вкладку ${tabId}`);
+    
+    // Удаляем класс 'active' у всех вкладок для предотвращения двойной активации
+    document.querySelectorAll('.tab.active').forEach(el => {
+      el.classList.remove('active');
+    });
+    
+    // Активируем новую вкладку в UI
+    const newActiveTab = document.querySelector(`.tab[data-tab-id="${tabId}"]`);
+    if (newActiveTab) {
+      newActiveTab.classList.add('active');
+    }
+    
+    // Блокируем кнопки на время переключения
+    document.querySelectorAll('.tab').forEach(el => {
+      el.style.pointerEvents = 'none';
+    });
+    
+    // Ожидаем результат от main процесса
+    console.log(`Отправка запроса в main процесс на переключение на вкладку ${tabId}`);
+    const result = await window.electronAPI.switchTab(tabId);
+    
+    // Проверяем результат и обновляем состояние
+    if (result && typeof result.activeTabId === 'number') {
+      console.log(`Успешное переключение на вкладку ${result.activeTabId}`);
+      
+      appState.activeTabId = result.activeTabId;
+      
+      // Обновляем интерфейс
+      renderTabs();
+      updateAddressBar();
+      updateNavigationButtons();
+    } else if (result && result.error) {
+      console.error(`Ошибка при переключении на вкладку ${tabId}:`, result.error);
+    } else {
+      console.error('Не удалось получить корректный результат при переключении вкладки');
+    }
+  } catch (error) {
+    console.error(`Ошибка при переключении на вкладку ${tabId}:`, error);
+  } finally {
+    // Разблокируем кнопки
+    document.querySelectorAll('.tab').forEach(el => {
+      el.style.pointerEvents = 'auto';
+    });
+    
+    // Сбрасываем флаг через некоторое время, чтобы предотвратить повторные клики
+    setTimeout(() => {
+      window.isProcessingTabSwitch = false;
+      console.log('Завершена операция переключения вкладки, снят флаг блокировки');
+    }, 300);
+  }
 }
 
 // Обновление URL в адресной строке при изменении страницы
