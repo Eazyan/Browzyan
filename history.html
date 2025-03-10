@@ -1,0 +1,901 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>История просмотра - Browzyan</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https://www.google.com;">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      height: 100vh;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    }
+
+    .history-container {
+      padding: 20px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      height: calc(100vh - 40px);
+    }
+
+    .history-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 15px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .history-title {
+      font-size: 24px;
+      font-weight: 500;
+      color: var(--text-color);
+    }
+
+    .search-container {
+      display: flex;
+      margin-bottom: 20px;
+      max-width: 600px;
+    }
+
+    .search-input {
+      flex: 1;
+      padding: 10px 12px;
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      background-color: var(--card-bg);
+      color: var(--text-color);
+      font-size: 14px;
+    }
+
+    .search-button {
+      margin-left: 10px;
+      padding: 0 15px;
+      background-color: var(--primary-color);
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+
+    .search-button:hover {
+      background-color: var(--primary-hover);
+    }
+
+    .history-actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+
+    .history-subtitle {
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .history-buttons {
+      display: flex;
+      gap: 10px;
+    }
+
+    .history-button {
+      background-color: var(--card-bg);
+      color: var(--text-color);
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      padding: 8px 12px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+
+    .history-button:hover {
+      background-color: var(--tab-hover-bg);
+    }
+
+    .history-button.danger {
+      color: #e53935;
+      border-color: rgba(229, 57, 53, 0.3);
+    }
+
+    .history-button.danger:hover {
+      background-color: rgba(229, 57, 53, 0.05);
+    }
+
+    .history-list {
+      background-color: var(--card-bg);
+      border-radius: 8px;
+      flex: 1;
+      overflow: auto;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    .history-group {
+      padding: 10px 20px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .history-group:last-child {
+      border-bottom: none;
+    }
+
+    .group-header {
+      padding: 8px 0;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--primary-color);
+    }
+
+    .history-item {
+      display: flex;
+      align-items: center;
+      padding: 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+
+    .history-item:hover {
+      background-color: var(--tab-hover-bg);
+    }
+
+    .favicon {
+      width: 16px;
+      height: 16px;
+      margin-right: 12px;
+      border-radius: 2px;
+    }
+
+    .history-content {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .history-title {
+      font-size: 14px;
+      margin-bottom: 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .history-url {
+      font-size: 12px;
+      color: #777;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .history-time {
+      font-size: 12px;
+      color: #777;
+      margin-left: 10px;
+      white-space: nowrap;
+    }
+
+    .history-delete {
+      visibility: hidden;
+      opacity: 0;
+      margin-left: 10px;
+      background: none;
+      border: none;
+      color: #777;
+      cursor: pointer;
+      padding: 5px;
+      font-size: 16px;
+      transition: opacity 0.2s;
+    }
+
+    .history-item:hover .history-delete {
+      visibility: visible;
+      opacity: 1;
+    }
+
+    .history-delete:hover {
+      color: #e53935;
+    }
+
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 50px 20px;
+      text-align: center;
+      color: #777;
+      height: 100%;
+    }
+
+    .empty-icon {
+      font-size: 48px;
+      margin-bottom: 20px;
+      opacity: 0.5;
+    }
+
+    .empty-title {
+      font-size: 18px;
+      margin-bottom: 10px;
+      color: var(--text-color);
+    }
+
+    .empty-message {
+      max-width: 400px;
+      font-size: 14px;
+    }
+
+    .loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+    }
+
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid rgba(0, 0, 0, 0.1);
+      border-radius: 50%;
+      border-top-color: var(--primary-color);
+      animation: spin 1s linear infinite;
+    }
+
+    [data-theme="dark"] .spinner {
+      border-color: rgba(255, 255, 255, 0.1);
+      border-top-color: var(--primary-color);
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Модальное окно */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.3s, visibility 0.3s;
+    }
+
+    .modal-overlay.visible {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .modal {
+      background-color: var(--card-bg);
+      border-radius: 8px;
+      width: 400px;
+      max-width: 90%;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    }
+
+    .modal-header {
+      padding: 15px 20px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .modal-title {
+      font-size: 16px;
+      font-weight: 500;
+      color: var(--text-color);
+    }
+
+    .modal-close {
+      background: none;
+      border: none;
+      font-size: 20px;
+      cursor: pointer;
+      color: #777;
+    }
+
+    .modal-body {
+      padding: 20px;
+      color: var(--text-color);
+    }
+
+    .modal-body p {
+      margin-bottom: 15px;
+    }
+
+    .modal-footer {
+      padding: 15px 20px;
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+
+    .period-options {
+      margin-top: 15px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .period-option {
+      display: flex;
+      align-items: center;
+    }
+
+    .period-option input {
+      margin-right: 10px;
+    }
+
+    .period-option label {
+      color: var(--text-color);
+    }
+
+    .modal-button {
+      padding: 8px 16px;
+      border-radius: 4px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+
+    .modal-button.cancel {
+      background-color: transparent;
+      border: 1px solid var(--border-color);
+      color: var(--text-color);
+    }
+
+    .modal-button.cancel:hover {
+      background-color: var(--tab-hover-bg);
+    }
+
+    .modal-button.danger {
+      background-color: #e53935;
+      border: 1px solid #e53935;
+      color: white;
+    }
+
+    .modal-button.danger:hover {
+      background-color: #d32f2f;
+    }
+  </style>
+</head>
+<body>
+  <div class="history-container">
+    <header class="history-header">
+      <h1 class="history-title">История просмотра</h1>
+    </header>
+
+    <div class="search-container">
+      <input type="text" id="searchInput" class="search-input" placeholder="Поиск в истории">
+      <button id="searchButton" class="search-button">Найти</button>
+    </div>
+
+    <div class="history-actions">
+      <span class="history-subtitle">Ваша история просмотра</span>
+      <div class="history-buttons">
+        <button id="clearTodayButton" class="history-button">Очистить за сегодня</button>
+        <button id="clearAllButton" class="history-button danger">Очистить всю историю</button>
+      </div>
+    </div>
+
+    <div id="historyContainer" class="history-list">
+      <div class="loading">
+        <div class="spinner"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Модальное окно для очистки истории -->
+  <div id="confirmModal" class="modal-overlay">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title">Очистить историю</h3>
+        <button id="modalClose" class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p>Вы уверены, что хотите очистить историю просмотра?</p>
+        <div class="period-options" id="periodOptions">
+          <div class="period-option">
+            <input type="radio" id="periodHour" name="period" value="hour">
+            <label for="periodHour">За последний час</label>
+          </div>
+          <div class="period-option">
+            <input type="radio" id="periodDay" name="period" value="day" checked>
+            <label for="periodDay">За сегодня</label>
+          </div>
+          <div class="period-option">
+            <input type="radio" id="periodWeek" name="period" value="week">
+            <label for="periodWeek">За неделю</label>
+          </div>
+          <div class="period-option">
+            <input type="radio" id="periodMonth" name="period" value="month">
+            <label for="periodMonth">За месяц</label>
+          </div>
+          <div class="period-option">
+            <input type="radio" id="periodAll" name="period" value="all">
+            <label for="periodAll">Всю историю</label>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="cancelClearButton" class="modal-button cancel">Отмена</button>
+        <button id="confirmClearButton" class="modal-button danger">Очистить</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // DOM-элементы
+    const historyContainer = document.getElementById('historyContainer');
+    const searchInput = document.getElementById('searchInput');
+    const searchButton = document.getElementById('searchButton');
+    const clearTodayButton = document.getElementById('clearTodayButton');
+    const clearAllButton = document.getElementById('clearAllButton');
+    const confirmModal = document.getElementById('confirmModal');
+    const modalClose = document.getElementById('modalClose');
+    const cancelClearButton = document.getElementById('cancelClearButton');
+    const confirmClearButton = document.getElementById('confirmClearButton');
+    const periodOptions = document.querySelectorAll('input[name="period"]');
+    
+    // Состояние
+    let historyData = [];
+    let selectedPeriod = 'day';
+    let isSearchMode = false;
+    
+    // Применение темы
+    function applyTheme(isDark) {
+      if (isDark) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      } else {
+        document.documentElement.removeAttribute('data-theme');
+      }
+    }
+    
+    // Инициализация страницы
+    function init() {
+      console.log('[История] Инициализация страницы');
+      
+      // По умолчанию используем светлую тему
+      applyTheme(false);
+      
+      try {
+        // Проверяем наличие API и применяем тему браузера
+        if (window.electronAPI && typeof window.electronAPI.getDarkMode === 'function') {
+          window.electronAPI.getDarkMode().then(isDark => {
+            console.log(`[История] Тема браузера: ${isDark ? 'тёмная' : 'светлая'}`);
+            applyTheme(isDark);
+          }).catch(err => {
+            console.warn('[История] Не удалось получить тему браузера:', err);
+          });
+        }
+      } catch (error) {
+        console.warn('[История] Ошибка при получении темы:', error);
+      }
+      
+      // Загружаем историю
+      loadHistory();
+      
+      // Устанавливаем обработчики событий
+      searchButton.addEventListener('click', searchHistory);
+      searchInput.addEventListener('keyup', e => {
+        if (e.key === 'Enter') searchHistory();
+      });
+      
+      clearTodayButton.addEventListener('click', () => showConfirmModal('day'));
+      clearAllButton.addEventListener('click', () => showConfirmModal('all'));
+      
+      modalClose.addEventListener('click', hideConfirmModal);
+      cancelClearButton.addEventListener('click', hideConfirmModal);
+      confirmClearButton.addEventListener('click', clearHistory);
+      
+      periodOptions.forEach(option => {
+        option.addEventListener('change', function() {
+          selectedPeriod = this.value;
+        });
+      });
+      
+      console.log('[История] Инициализация завершена');
+    }
+    
+    // Загрузка истории
+    async function loadHistory() {
+      console.log('[История] Загрузка истории');
+      
+      try {
+        // Показываем индикатор загрузки
+        historyContainer.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+        
+        // Проверяем API
+        if (!window.electronAPI || typeof window.electronAPI.getRecentHistory !== 'function') {
+          throw new Error('API для истории недоступно');
+        }
+        
+        // Загружаем данные
+        historyData = await window.electronAPI.getRecentHistory();
+        console.log(`[История] Получено ${historyData ? historyData.length : 0} записей`);
+        
+        // Отображаем историю
+        renderHistory(historyData);
+      } catch (error) {
+        console.error('[История] Ошибка загрузки:', error);
+        showMockData();
+      }
+    }
+    
+    // Показ тестовых данных (если API недоступно)
+    function showMockData() {
+      const mockData = [
+        { url: 'https://github.com', title: 'GitHub: Where the world builds software', timestamp: Date.now() - 10 * 60 * 1000 },
+        { url: 'https://electronjs.org', title: 'Electron | Build cross-platform desktop apps with JavaScript, HTML, and CSS', timestamp: Date.now() - 30 * 60 * 1000 },
+        { url: 'https://www.yandex.ru', title: 'Яндекс', timestamp: Date.now() - 2 * 60 * 60 * 1000 },
+        { url: 'https://developer.mozilla.org', title: 'MDN Web Docs', timestamp: Date.now() - 5 * 60 * 60 * 1000 },
+        { url: 'https://www.wikipedia.org', title: 'Wikipedia - The Free Encyclopedia', timestamp: Date.now() - 24 * 60 * 60 * 1000 }
+      ];
+      
+      console.log('[История] Показ тестовых данных');
+      renderHistory(mockData);
+    }
+    
+    // Поиск в истории
+    function searchHistory() {
+      const query = searchInput.value.trim();
+      if (!query) {
+        isSearchMode = false;
+        return loadHistory();
+      }
+      
+      console.log(`[История] Поиск: "${query}"`);
+      historyContainer.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+      
+      try {
+        if (!window.electronAPI || typeof window.electronAPI.searchHistory !== 'function') {
+          // Локальный поиск, если API недоступно
+          console.log('[История] API поиска недоступно, используем локальный поиск');
+          const results = historyData.filter(item => 
+            item.title.toLowerCase().includes(query.toLowerCase()) || 
+            item.url.toLowerCase().includes(query.toLowerCase())
+          );
+          console.log(`[История] Найдено ${results.length} результатов`);
+          isSearchMode = true;
+          renderHistory(results, true);
+          return;
+        }
+        
+        // Используем API поиска
+        window.electronAPI.searchHistory(query).then(results => {
+          console.log(`[История] Найдено ${results.length} результатов`);
+          isSearchMode = true;
+          renderHistory(results, true);
+        }).catch(error => {
+          console.error('[История] Ошибка поиска:', error);
+          showError('Не удалось выполнить поиск');
+        });
+      } catch (error) {
+        console.error('[История] Ошибка поиска:', error);
+        showError('Ошибка при поиске');
+      }
+    }
+    
+    // Отображение истории
+    function renderHistory(history, isSearchResults = false) {
+      // Проверяем наличие данных
+      if (!history || history.length === 0) {
+        historyContainer.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-icon">🕒</div>
+            <h3 class="empty-title">${isSearchResults ? 'Ничего не найдено' : 'История просмотра пуста'}</h3>
+            <p class="empty-message">
+              ${isSearchResults 
+                ? 'Попробуйте изменить поисковый запрос' 
+                : 'Здесь будет отображаться история просмотренных сайтов'}
+            </p>
+          </div>
+        `;
+        return;
+      }
+      
+      // Группируем историю по дням
+      const groupedHistory = groupHistoryByDate(history);
+      
+      // Строим HTML
+      let html = '';
+      for (const [date, items] of Object.entries(groupedHistory)) {
+        html += `
+          <div class="history-group">
+            <h3 class="group-header">${date}</h3>
+        `;
+        
+        for (const item of items) {
+          const favicon = getFavicon(item.url);
+          html += `
+            <div class="history-item" data-url="${escapeHtml(item.url)}">
+              <img src="${escapeHtml(favicon)}" class="favicon" onerror="this.src='favicon.ico'">
+              <div class="history-content">
+                <div class="history-title">${escapeHtml(item.title || 'Без названия')}</div>
+                <div class="history-url">${escapeHtml(item.url)}</div>
+              </div>
+              <div class="history-time">${formatTime(item.timestamp)}</div>
+              <button class="history-delete" title="Удалить из истории">✕</button>
+            </div>
+          `;
+        }
+        
+        html += `</div>`;
+      }
+      
+      historyContainer.innerHTML = html;
+      
+      // Добавляем обработчики
+      attachEventHandlers();
+    }
+    
+    // Добавление обработчиков событий к элементам истории
+    function attachEventHandlers() {
+      // Для записей истории
+      const historyItems = document.querySelectorAll('.history-item');
+      historyItems.forEach(item => {
+        item.addEventListener('click', (e) => {
+          // Если клик не на кнопке удаления
+          if (!e.target.classList.contains('history-delete')) {
+            const url = item.dataset.url;
+            console.log(`[История] Переход: ${url}`);
+            
+            // Переходим по URL
+            if (window.electronAPI && window.electronAPI.navigate) {
+              window.electronAPI.navigate(url);
+            } else {
+              // Запасной вариант
+              window.location.href = url;
+            }
+          }
+        });
+      });
+      
+      // Для кнопок удаления
+      const deleteButtons = document.querySelectorAll('.history-delete');
+      deleteButtons.forEach(button => {
+        button.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const item = button.closest('.history-item');
+          const url = item.dataset.url;
+          deleteHistoryItem(url, item);
+        });
+      });
+    }
+    
+    // Группировка истории по датам
+    function groupHistoryByDate(history) {
+      const groups = {};
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+      const yesterday = today - 24 * 60 * 60 * 1000;
+      
+      history.forEach(item => {
+        if (!item || !item.timestamp) return;
+        
+        const date = new Date(item.timestamp);
+        const dateTime = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+        
+        let groupName;
+        if (dateTime === today) {
+          groupName = 'Сегодня';
+        } else if (dateTime === yesterday) {
+          groupName = 'Вчера';
+        } else {
+          groupName = date.toLocaleDateString('ru-RU', {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric'
+          });
+        }
+        
+        if (!groups[groupName]) {
+          groups[groupName] = [];
+        }
+        
+        groups[groupName].push(item);
+      });
+      
+      return groups;
+    }
+    
+    // Форматирование времени
+    function formatTime(timestamp) {
+      if (!timestamp) return '';
+      
+      try {
+        const date = new Date(timestamp);
+        return date.toLocaleTimeString('ru-RU', {
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+      } catch (e) {
+        return '';
+      }
+    }
+    
+    // Получение иконки сайта
+    function getFavicon(url) {
+      try {
+        if (!url) return 'favicon.ico';
+        const domain = new URL(url).hostname;
+        return `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+      } catch {
+        return 'favicon.ico';
+      }
+    }
+    
+    // Удаление записи из истории
+    function deleteHistoryItem(url, element) {
+      if (!url || !element) return;
+      
+      console.log(`[История] Удаление: ${url}`);
+      
+      // Пробуем использовать API, если доступно
+      if (window.electronAPI && typeof window.electronAPI.deleteHistoryItem === 'function') {
+        window.electronAPI.deleteHistoryItem(url)
+          .then(result => {
+            if (result) animateAndRemove(element);
+          })
+          .catch(error => {
+            console.warn('[История] Ошибка API при удалении:', error);
+            // Удаляем из локальных данных, если API не сработало
+            historyData = historyData.filter(item => item.url !== url);
+            animateAndRemove(element);
+          });
+      } else {
+        // Если API недоступно, просто удаляем визуально
+        console.log('[История] API недоступно, удаляем локально');
+        historyData = historyData.filter(item => item.url !== url);
+        animateAndRemove(element);
+      }
+    }
+    
+    // Анимированное удаление элемента
+    function animateAndRemove(element) {
+      element.style.height = element.offsetHeight + 'px';
+      element.style.overflow = 'hidden';
+      
+      setTimeout(() => {
+        element.style.transition = 'all 0.3s ease';
+        element.style.height = '0';
+        element.style.opacity = '0';
+        element.style.padding = '0';
+        element.style.margin = '0';
+        
+        setTimeout(() => {
+          // Удаляем элемент из DOM
+          element.remove();
+          
+          // Проверяем, не пуста ли группа
+          const group = element.closest('.history-group');
+          if (group && group.querySelectorAll('.history-item').length === 0) {
+            group.remove();
+          }
+          
+          // Проверяем, не пуста ли история
+          if (historyContainer.querySelectorAll('.history-item').length === 0) {
+            showEmptyState();
+          }
+        }, 300);
+      }, 10);
+    }
+    
+    // Показ пустого состояния
+    function showEmptyState() {
+      historyContainer.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-icon">🕒</div>
+          <h3 class="empty-title">История просмотра пуста</h3>
+          <p class="empty-message">Здесь будет отображаться история просмотренных сайтов</p>
+        </div>
+      `;
+    }
+    
+    // Показ модального окна
+    function showConfirmModal(period = 'day') {
+      selectedPeriod = period;
+      
+      // Выбираем соответствующую опцию
+      const option = document.getElementById(`period${capitalize(period)}`);
+      if (option) {
+        option.checked = true;
+      }
+      
+      // Показываем диалог
+      confirmModal.classList.add('visible');
+    }
+    
+    // Скрытие модального окна
+    function hideConfirmModal() {
+      confirmModal.classList.remove('visible');
+    }
+    
+    // Очистка истории
+    function clearHistory() {
+      console.log(`[История] Очистка за период: ${selectedPeriod}`);
+      
+      try {
+        // Если API доступно
+        if (window.electronAPI && 
+            ((selectedPeriod === 'all' && typeof window.electronAPI.clearHistory === 'function') || 
+             (selectedPeriod !== 'all' && typeof window.electronAPI.clearHistoryPeriod === 'function'))) {
+          
+          // Используем API для очистки
+          let promise;
+          if (selectedPeriod === 'all') {
+            promise = window.electronAPI.clearHistory();
+          } else {
+            promise = window.electronAPI.clearHistoryPeriod(selectedPeriod);
+          }
+          
+          promise.then(result => {
+            hideConfirmModal();
+            loadHistory();
+          }).catch(error => {
+            console.error('[История] Ошибка API при очистке:', error);
+            alert('Не удалось очистить историю');
+          });
+        } else {
+          // Если API недоступно, очищаем локально
+          console.log('[История] API недоступно, очищаем локально');
+          historyData = [];
+          hideConfirmModal();
+          showEmptyState();
+        }
+      } catch (error) {
+        console.error('[История] Ошибка при очистке:', error);
+        hideConfirmModal();
+        showEmptyState();
+      }
+    }
+    
+    // Отображение ошибки
+    function showError(message) {
+      console.error(`[История] ${message}`);
+      historyContainer.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-icon">⚠️</div>
+          <h3 class="empty-title">Ошибка</h3>
+          <p class="empty-message">${message}</p>
+        </div>
+      `;
+    }
+    
+    // Вспомогательные функции
+    function capitalize(string) {
+      return string.charAt(0).toUpperCase() + string.slice(1);
+    }
+    
+    function escapeHtml(unsafe) {
+      return (unsafe || '')
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+    
+    // Инициализация при загрузке страницы
+    document.addEventListener('DOMContentLoaded', init);
+  </script>
+</body>
+</html> 

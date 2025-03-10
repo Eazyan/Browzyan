@@ -39,6 +39,15 @@ const darkThemeButton = document.getElementById('darkThemeButton');
 const lineWidthRange = document.getElementById('lineWidthRange');
 const lineHeightRange = document.getElementById('lineHeightRange');
 
+// Элементы настройки цветов
+const useDefaultThemesToggle = document.getElementById('useDefaultThemes');
+const customColorsContainer = document.getElementById('customColorsContainer');
+const primaryColorPicker = document.getElementById('primaryColorPicker');
+const bgColorPicker = document.getElementById('bgColorPicker');
+const textColorPicker = document.getElementById('textColorPicker');
+const headerBgPicker = document.getElementById('headerBgPicker');
+const resetColorsButton = document.getElementById('resetColorsButton');
+
 // Поисковая система по умолчанию
 let defaultSearchUrl = 'https://ya.ru';
 let defaultSearchQueryUrl = 'https://yandex.ru/search/?text=';
@@ -80,6 +89,9 @@ const downloadsList = document.getElementById('downloadsList');
 // Отслеживаем текущие загрузки
 const activeDownloads = new Map();
 
+// Элементы интерфейса
+const historyButton = document.getElementById('historyButton');
+
 // Инициализация подписки на события
 function initEventSubscriptions() {
   // Подписка на событие загрузки страницы
@@ -95,6 +107,15 @@ function initEventSubscriptions() {
     renderTabs();
     updateAddressBar();
     updateNavigationButtons();
+  });
+  
+  // Подписка на событие создания новой вкладки
+  window.electronAPI.on('tab-created', (tab) => {
+    // Добавляем новую вкладку в локальный список, если её ещё нет
+    if (!appState.tabs.some(t => t.id === tab.id)) {
+      appState.tabs.push(tab);
+      renderTabs();
+    }
   });
   
   // Подписка на события загрузок
@@ -144,36 +165,49 @@ async function loadAppState() {
   renderTabs();
 }
 
-// Обновление UI в соответствии с состоянием
-function updateUI() {
-  // Обновление темы
-  if (appState.darkMode) {
-    document.documentElement.setAttribute('data-theme', 'dark');
-  } else {
-    document.documentElement.removeAttribute('data-theme');
+// Функция обновления интерфейса в соответствии с настройками
+async function updateUI() {
+  try {
+    const state = await window.electronAPI.getAppState();
+    appState = state; // Обновляем локальную копию состояния
+    
+    // Темная тема
+    if (state.darkMode) {
+      document.documentElement.setAttribute('data-theme', 'dark');
+    } else {
+      document.documentElement.removeAttribute('data-theme');
+    }
+    darkModeToggle.checked = state.darkMode;
+    
+    // После установки темы проверяем, нужно ли применить пользовательские цвета
+    const customTheme = await window.electronAPI.getCustomTheme();
+    if (customTheme.enabled) {
+      applyCustomColors(customTheme);
+    }
+    
+    // Режим фокусировки
+    if (state.focusMode) {
+      document.body.classList.add('focus-mode');
+    } else {
+      document.body.classList.remove('focus-mode');
+    }
+    focusModeToggle.checked = state.focusMode;
+    
+    // Боковая панель
+    if (state.sidebarVisible) {
+      sidebar.classList.add('visible');
+    } else {
+      sidebar.classList.remove('visible');
+    }
+    
+    // Обновление состояния блокировки рекламы
+    adBlockToggle.checked = state.adBlockEnabled;
+    
+    // Отображение закладок
+    renderBookmarks();
+  } catch (error) {
+    console.error('Ошибка при обновлении интерфейса:', error);
   }
-  darkModeToggle.checked = appState.darkMode;
-  
-  // Обновление режима фокусировки
-  if (appState.focusMode) {
-    document.body.classList.add('focus-mode');
-  } else {
-    document.body.classList.remove('focus-mode');
-  }
-  focusModeToggle.checked = appState.focusMode;
-  
-  // Обновление боковой панели
-  if (appState.sidebarVisible) {
-    sidebar.classList.add('visible');
-  } else {
-    sidebar.classList.remove('visible');
-  }
-  
-  // Обновление состояния блокировки рекламы
-  adBlockToggle.checked = appState.adBlockEnabled;
-  
-  // Отображение закладок
-  renderBookmarks();
 }
 
 // Отображение закладок
@@ -227,12 +261,16 @@ function renderTabs() {
     
     const title = document.createElement('span');
     title.className = 'tab-title';
-    title.textContent = tab.title || 'Загрузка...';
+    title.textContent = tab.title || 'Новая вкладка';
     
     const closeButton = document.createElement('button');
     closeButton.className = 'tab-close';
-    closeButton.textContent = '✕';
-    closeButton.title = 'Закрыть вкладку';
+    closeButton.setAttribute('title', 'Закрыть вкладку');
+    closeButton.innerHTML = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+        <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/>
+      </svg>
+    `;
     
     tabElement.appendChild(title);
     tabElement.appendChild(closeButton);
@@ -695,12 +733,26 @@ lineHeightRange.addEventListener('change', () => {
 });
 
 // Функции для работы с загрузками
-function toggleDownloadsPanel() {
-  downloadsPanel.classList.toggle('visible');
+async function toggleDownloadsPanel() {
+  const isVisible = await window.electronAPI.toggleDownloadsPanel();
   
-  if (downloadsPanel.classList.contains('visible')) {
+  // Обновляем класс панели для CSS анимации
+  downloadsPanel.classList.toggle('visible', isVisible);
+  
+  // Обновляем класс контейнера для сдвига верхней панели
+  document.querySelector('.browser-container').classList.toggle('downloads-visible', isVisible);
+  
+  if (isVisible) {
     refreshDownloadsList();
   }
+}
+
+// Также обновим функцию закрытия панели
+function closeDownloadsPanel() {
+  window.electronAPI.toggleDownloadsPanel(false).then(() => {
+    downloadsPanel.classList.remove('visible');
+    document.querySelector('.browser-container').classList.remove('downloads-visible');
+  });
 }
 
 async function refreshDownloadsList() {
@@ -761,8 +813,13 @@ function addDownloadItem(download) {
   // Добавляем элемент в начало списка
   downloadsList.insertBefore(downloadItem, downloadsList.firstChild);
   
-  // Показываем панель загрузок
-  downloadsPanel.classList.add('visible');
+  // Показываем панель загрузок корректно через API
+  window.electronAPI.toggleDownloadsPanel(true).then(() => {
+    // Также устанавливаем класс visible для CSS-анимации
+    downloadsPanel.classList.add('visible');
+    // Обновляем класс контейнера для сдвига верхней панели
+    document.querySelector('.browser-container').classList.add('downloads-visible');
+  });
 }
 
 function updateDownloadProgress(progress) {
@@ -1010,6 +1067,98 @@ window.openDownloadFolder = async function(path) {
   }
 };
 
+// Функции для работы с цветами
+async function loadCustomThemeSettings() {
+  try {
+    const customTheme = await window.electronAPI.getCustomTheme();
+    
+    // Заполняем значения цветов
+    primaryColorPicker.value = customTheme.primaryColor;
+    bgColorPicker.value = customTheme.backgroundColor;
+    textColorPicker.value = customTheme.textColor;
+    headerBgPicker.value = customTheme.headerColor;
+    
+    // Обновляем состояние переключателя
+    useDefaultThemesToggle.checked = !customTheme.enabled;
+    customColorsContainer.style.display = customTheme.enabled ? 'block' : 'none';
+    
+    // Если включена пользовательская тема, применяем её
+    if (customTheme.enabled) {
+      applyCustomColors(customTheme);
+    }
+  } catch (error) {
+    console.error('Ошибка при загрузке настроек пользовательских цветов:', error);
+  }
+}
+
+function applyCustomColors(customTheme) {
+  // Сохраняем текущий режим (светлая/темная тема)
+  const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
+  
+  // Применяем пользовательские цвета через CSS переменные
+  document.documentElement.style.setProperty('--primary-color', customTheme.primaryColor);
+  document.documentElement.style.setProperty('--primary-hover', adjustColor(customTheme.primaryColor, -20));
+  document.documentElement.style.setProperty('--bg-color', customTheme.backgroundColor);
+  document.documentElement.style.setProperty('--text-color', customTheme.textColor);
+  document.documentElement.style.setProperty('--header-bg', customTheme.headerColor);
+  document.documentElement.style.setProperty('--sidebar-bg', customTheme.headerColor);
+  document.documentElement.style.setProperty('--card-bg', adjustColor(customTheme.headerColor, isDarkMode ? -10 : 10));
+  
+  // Устанавливаем производные цвета
+  const borderColor = isDarkMode ? 
+    adjustColor(customTheme.backgroundColor, 20) : 
+    adjustColor(customTheme.backgroundColor, -20);
+  document.documentElement.style.setProperty('--border-color', borderColor);
+  
+  // Цвета вкладок
+  document.documentElement.style.setProperty('--tab-active-bg', customTheme.headerColor);
+  document.documentElement.style.setProperty('--tab-hover-bg', adjustColor(customTheme.headerColor, isDarkMode ? 10 : -5));
+  document.documentElement.style.setProperty('--tab-inactive-bg', adjustColor(customTheme.headerColor, isDarkMode ? -10 : -10));
+}
+
+// Вспомогательная функция для корректировки цвета
+function adjustColor(colorHex, amount) {
+  let color = colorHex.replace('#', '');
+  
+  // Преобразуем в RGB
+  let r = parseInt(color.substring(0, 2), 16);
+  let g = parseInt(color.substring(2, 4), 16);
+  let b = parseInt(color.substring(4, 6), 16);
+  
+  // Корректируем значения
+  r = Math.max(0, Math.min(255, r + amount));
+  g = Math.max(0, Math.min(255, g + amount));
+  b = Math.max(0, Math.min(255, b + amount));
+  
+  // Обратно в HEX
+  return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+}
+
+// Сброс пользовательских цветов
+async function resetCustomColors() {
+  try {
+    const defaultTheme = await window.electronAPI.resetCustomTheme();
+    
+    // Обновляем UI элементы
+    primaryColorPicker.value = defaultTheme.primaryColor;
+    bgColorPicker.value = defaultTheme.backgroundColor;
+    textColorPicker.value = defaultTheme.textColor;
+    headerBgPicker.value = defaultTheme.headerColor;
+    
+    // Включаем стандартные темы
+    useDefaultThemesToggle.checked = true;
+    customColorsContainer.style.display = 'none';
+    
+    // Сбрасываем стили
+    document.documentElement.removeAttribute('style');
+    
+    // Проверяем и применяем текущую тему (светлую/темную)
+    updateUI();
+  } catch (error) {
+    console.error('Ошибка при сбросе цветов:', error);
+  }
+}
+
 // Инициализация при загрузке страницы
 window.addEventListener('DOMContentLoaded', async () => {
   initEventSubscriptions();
@@ -1023,7 +1172,79 @@ window.addEventListener('DOMContentLoaded', async () => {
   
   // Устанавливаем обработчики событий для загрузок
   downloadsButton.addEventListener('click', toggleDownloadsPanel);
-  closeDownloadsButton.addEventListener('click', () => {
-    downloadsPanel.classList.remove('visible');
-  });
-}); 
+  closeDownloadsButton.addEventListener('click', closeDownloadsPanel);
+  
+  // Загружаем настройки цветов
+  await loadCustomThemeSettings();
+  
+  // Обработчик для кнопки истории
+  historyButton.addEventListener('click', openHistoryPage);
+});
+
+// Обработчики событий для настроек цветов
+useDefaultThemesToggle.addEventListener('change', async (e) => {
+  const useDefault = e.target.checked;
+  customColorsContainer.style.display = useDefault ? 'none' : 'block';
+  
+  // Сохраняем настройку
+  await window.electronAPI.toggleCustomTheme(!useDefault);
+  
+  if (useDefault) {
+    // Возвращаем стандартную тему, удаляя inline стили
+    document.documentElement.removeAttribute('style');
+    // Применяем текущую тему (светлую/темную)
+    updateUI();
+  } else {
+    // Собираем текущие значения цветов
+    const customTheme = {
+      primaryColor: primaryColorPicker.value,
+      backgroundColor: bgColorPicker.value,
+      textColor: textColorPicker.value,
+      headerColor: headerBgPicker.value
+    };
+    
+    // Применяем пользовательские цвета
+    applyCustomColors(customTheme);
+    
+    // Сохраняем изменения
+    await window.electronAPI.updateCustomTheme(customTheme);
+  }
+});
+
+// Обработчики для каждого из color picker'ов
+primaryColorPicker.addEventListener('change', updateColor);
+bgColorPicker.addEventListener('change', updateColor);
+textColorPicker.addEventListener('change', updateColor);
+headerBgPicker.addEventListener('change', updateColor);
+
+// Функция обновления цвета
+async function updateColor() {
+  // Проверяем, включены ли пользовательские темы
+  if (!useDefaultThemesToggle.checked) {
+    // Собираем текущие значения цветов
+    const customTheme = {
+      primaryColor: primaryColorPicker.value,
+      backgroundColor: bgColorPicker.value,
+      textColor: textColorPicker.value,
+      headerColor: headerBgPicker.value
+    };
+    
+    // Применяем пользовательские цвета
+    applyCustomColors(customTheme);
+    
+    // Сохраняем изменения
+    await window.electronAPI.updateCustomTheme(customTheme);
+  }
+}
+
+// Обработчик сброса цветов
+resetColorsButton.addEventListener('click', resetCustomColors);
+
+// Функция открытия страницы истории
+async function openHistoryPage() {
+  try {
+    await window.electronAPI.openHistoryPage();
+  } catch (error) {
+    console.error('Ошибка при открытии страницы истории:', error);
+  }
+} 

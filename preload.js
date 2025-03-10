@@ -1,7 +1,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 // Настраиваем получение событий из main процесса
-const validEvents = ['page-loaded', 'tab-changed'];
+const validEvents = ['page-loaded', 'tab-changed', 'tab-created', 'download-created', 'download-updated', 'download-done', 'download-failed'];
 
 // Экспортируем API в окно рендеринга
 contextBridge.exposeInMainWorld('electronAPI', {
@@ -18,6 +18,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   toggleDarkMode: () => ipcRenderer.invoke('toggle-dark-mode'),
   toggleFocusMode: () => ipcRenderer.invoke('toggle-focus-mode'),
   toggleSidebar: () => ipcRenderer.invoke('toggle-sidebar'),
+  
+  // Методы для настройки тем и цветов
+  getCustomTheme: () => ipcRenderer.invoke('get-custom-theme'),
+  toggleCustomTheme: (enabled) => ipcRenderer.invoke('toggle-custom-theme', enabled),
+  updateCustomTheme: (theme) => ipcRenderer.invoke('update-custom-theme', theme),
+  resetCustomTheme: () => ipcRenderer.invoke('reset-custom-theme'),
   
   // Методы для работы с закладками
   getBookmarks: () => ipcRenderer.invoke('get-bookmarks'),
@@ -62,6 +68,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   resumeDownload: (id) => ipcRenderer.invoke('resume-download', id),
   cancelDownload: (id) => ipcRenderer.invoke('cancel-download', id),
   openDownloadFolder: (path) => ipcRenderer.invoke('open-download-folder', path),
+  toggleDownloadsPanel: (isVisible) => ipcRenderer.invoke('toggle-downloads-panel', isVisible),
+  getDownloadsPanelVisible: () => ipcRenderer.invoke('get-downloads-panel-visible'),
   
   // Подписка на события загрузок
   onDownloadStarted: (callback) => ipcRenderer.on('download-started', callback),
@@ -80,5 +88,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.removeListener(channel, subscription);
       };
     }
-  }
+  },
+  
+  // Методы для работы с историей
+  searchHistory: (query) => ipcRenderer.invoke('search-history', query),
+  clearHistory: () => ipcRenderer.invoke('clear-history'),
+  clearHistoryPeriod: (period) => ipcRenderer.invoke('clear-history-period', period),
+  deleteHistoryItem: (url) => ipcRenderer.invoke('delete-history-item', url),
+  openHistoryPage: () => ipcRenderer.invoke('open-history-page'),
 }); 

@@ -23,7 +23,18 @@ const store = new Store({
       { id: 1, url: DEFAULT_SEARCH_URL, title: 'Яндекс' }
     ],
     activeTabId: 1,
-    adBlockEnabled: false
+    adBlockEnabled: false,
+    customTheme: {
+      enabled: false,
+      primaryColor: '#0060df',
+      backgroundColor: '#f0f0f4',
+      textColor: '#15141a',
+      headerColor: '#f9f9fb'
+    },
+    // Добавляем историю просмотра
+    history: [],
+    // Топ сайтов (кэшированные данные для быстрого доступа)
+    topSites: []
   }
 });
 
@@ -42,7 +53,14 @@ let appState = {
   lastVisitedUrl: store.get('lastVisitedUrl'),
   tabs: store.get('tabs'),
   activeTabId: store.get('activeTabId'),
-  adBlockEnabled: store.get('adBlockEnabled')
+  adBlockEnabled: store.get('adBlockEnabled'),
+  downloadsPanelVisible: false,
+  downloads: [],
+  customTheme: store.get('customTheme'),
+  // Добавляем историю просмотра
+  history: store.get('history'),
+  // Топ сайтов
+  topSites: store.get('topSites')
 };
 
 // Хранилище для временного содержимого HTML
@@ -183,17 +201,44 @@ function createTab(tabId, tabUrl) {
   // Добавляем в хранилище
   browserViews[tabId] = view;
 
-  // Добавляем обработчики событий для этой вкладки
+  // Добавляем BrowserView в окно (но не делаем его видимым)
+  mainWindow.addBrowserView(view);
+
+  // Обработчик для открытия ссылок в новой вкладке вместо нового окна
+  view.webContents.setWindowOpenHandler(({ url }) => {
+    // Создаем новую вкладку с полученным URL
+    const newTabId = nextTabId++;
+    const newTab = { id: newTabId, url: url, title: 'Загрузка...' };
+    
+    // Добавляем новую вкладку в список
+    appState.tabs.push(newTab);
+    store.set('tabs', appState.tabs);
+    
+    // Отправляем сообщение о создании вкладки в рендерер
+    mainWindow.webContents.send('tab-created', newTab);
+    
+    // Создаем новую вкладку
+    createTab(newTabId, url);
+    
+    // Активируем новую вкладку
+    activateTab(newTabId);
+    
+    // Предотвращаем открытие нового окна
+    return { action: 'deny' };
+  });
+
+  // Обработчики событий для BrowserView
   view.webContents.on('did-finish-load', () => {
     const currentUrl = view.webContents.getURL();
-    const pageTitle = view.webContents.getTitle();
-
-    // Обновляем данные вкладки
+    const title = view.webContents.getTitle();
+    
+    // Обновляем заголовок вкладки
     const tabIndex = appState.tabs.findIndex(tab => tab.id === tabId);
     if (tabIndex !== -1) {
+      appState.tabs[tabIndex].title = title;
       appState.tabs[tabIndex].url = currentUrl;
-      appState.tabs[tabIndex].title = pageTitle;
       store.set('tabs', appState.tabs);
+      mainWindow.webContents.send('tabs-updated', appState.tabs);
     }
 
     // Если это активная вкладка, сохраняем URL как последний посещенный
@@ -203,12 +248,15 @@ function createTab(tabId, tabUrl) {
       
       // Обновляем заголовок окна
       if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.setTitle(`${pageTitle} - ${APP_NAME}`);
+        mainWindow.setTitle(`${title} - ${APP_NAME}`);
         
         // Отправляем сообщение в renderer процесс об окончании загрузки
         mainWindow.webContents.send('page-loaded', currentUrl);
       }
     }
+    
+    // Сохраняем в историю (кроме специальных страниц)
+    addToHistory(currentUrl, title);
   });
 
   // Обработка ошибок загрузки страницы
@@ -412,13 +460,16 @@ function updateBrowserViewBounds(tabId) {
   if (!mainWindow || !browserViews[tabId]) return;
   
   const bounds = mainWindow.getContentBounds();
-  const topOffset = 120; // Высота верхней панели с URL и вкладками
+  const topOffset = 86; // Высота верхней панели (вкладки + панель навигации)
   let leftOffset = appState.sidebarVisible ? 250 : 0; // Ширина боковой панели
+  
+  // Учитываем видимость панели загрузок
+  let rightOffset = appState.downloadsPanelVisible ? Math.min(bounds.width * 0.25, 400) : 0;
   
   browserViews[tabId].setBounds({ 
     x: leftOffset, 
     y: topOffset, 
-    width: bounds.width - leftOffset, 
+    width: bounds.width - leftOffset - rightOffset, 
     height: bounds.height - topOffset 
   });
 }
@@ -439,7 +490,13 @@ ipcMain.handle('navigate', async (event, url) => {
   
   try {
     await activeView.webContents.loadURL(url);
-    return { success: true, url: activeView.webContents.getURL() };
+    
+    // После успешной загрузки добавляем в историю
+    const finalUrl = activeView.webContents.getURL();
+    const title = activeView.webContents.getTitle();
+    addToHistory(finalUrl, title);
+    
+    return { success: true, url: finalUrl };
   } catch (error) {
     console.error('Ошибка навигации:', error);
     return { success: false, error: error.message };
@@ -828,28 +885,92 @@ ipcMain.handle('get-dark-mode', () => {
 
 // Получение часто посещаемых сайтов
 ipcMain.handle('get-top-sites', () => {
-  // Здесь будет логика анализа посещений из истории
-  // Временная заглушка с примерами
-  return [
-    { url: 'https://yandex.ru', title: 'Яндекс', visits: 42 },
-    { url: 'https://github.com', title: 'GitHub', visits: 28 },
-    { url: 'https://vk.com', title: 'ВКонтакте', visits: 24 },
-    { url: 'https://youtube.com', title: 'YouTube', visits: 19 },
-    { url: 'https://habr.com', title: 'Хабр', visits: 15 }
-  ];
+  return appState.topSites;
 });
 
 // Получение недавней истории
 ipcMain.handle('get-recent-history', () => {
-  // Здесь будет логика получения истории
-  // Временная заглушка с примерами
-  return [
-    { url: 'https://habr.com/ru/articles/697090/', title: 'Создание Electron приложения: подробное руководство', timestamp: Date.now() - 30 * 60 * 1000 },
-    { url: 'https://yandex.ru/news', title: 'Яндекс.Новости', timestamp: Date.now() - 2 * 60 * 60 * 1000 },
-    { url: 'https://github.com/electron/electron', title: 'electron/electron: Build cross-platform desktop apps with JavaScript, HTML, and CSS', timestamp: Date.now() - 5 * 60 * 60 * 1000 },
-    { url: 'https://www.electronjs.org/docs/latest/', title: 'Документация Electron', timestamp: Date.now() - 1 * 24 * 60 * 60 * 1000 },
-    { url: 'https://developer.mozilla.org/en-US/docs/Web/API', title: 'Web APIs | MDN', timestamp: Date.now() - 2 * 24 * 60 * 60 * 1000 }
-  ];
+  // Возвращаем последние 50 записей истории
+  return appState.history.slice(0, 50);
+});
+
+// Поиск в истории
+ipcMain.handle('search-history', (event, query) => {
+  if (!query || query.trim() === '') {
+    return [];
+  }
+  
+  const searchLower = query.toLowerCase();
+  return appState.history
+    .filter(item => {
+      return item.title.toLowerCase().includes(searchLower) || 
+             item.url.toLowerCase().includes(searchLower);
+    })
+    .slice(0, 100); // Ограничиваем результаты
+});
+
+// Очистка всей истории
+ipcMain.handle('clear-history', () => {
+  appState.history = [];
+  store.set('history', []);
+  
+  // Сбрасываем также топ сайтов
+  appState.topSites = [];
+  store.set('topSites', []);
+  
+  return true;
+});
+
+// Удаление одной записи из истории
+ipcMain.handle('delete-history-item', (event, url) => {
+  const initialLength = appState.history.length;
+  appState.history = appState.history.filter(item => item.url !== url);
+  
+  // Если были удалены записи, обновляем хранилище и топ сайтов
+  if (initialLength !== appState.history.length) {
+    store.set('history', appState.history);
+    updateTopSites();
+    return true;
+  }
+  
+  return false;
+});
+
+// Очистка истории за период
+ipcMain.handle('clear-history-period', (event, period) => {
+  const now = Date.now();
+  let timeThreshold = now;
+  
+  // Определяем порог времени в зависимости от периода
+  switch (period) {
+    case 'hour':
+      timeThreshold = now - 60 * 60 * 1000; // 1 час
+      break;
+    case 'day':
+      timeThreshold = now - 24 * 60 * 60 * 1000; // 1 день
+      break;
+    case 'week':
+      timeThreshold = now - 7 * 24 * 60 * 60 * 1000; // 1 неделя
+      break;
+    case 'month':
+      timeThreshold = now - 30 * 24 * 60 * 60 * 1000; // 30 дней
+      break;
+    default:
+      return false;
+  }
+  
+  // Фильтруем историю, оставляя только записи старше порога
+  const initialLength = appState.history.length;
+  appState.history = appState.history.filter(item => item.timestamp < timeThreshold);
+  
+  // Если были удалены записи, обновляем хранилище и топ сайтов
+  if (initialLength !== appState.history.length) {
+    store.set('history', appState.history);
+    updateTopSites();
+    return true;
+  }
+  
+  return false;
 });
 
 // Обработка навигации со стартовой страницы
@@ -879,6 +1000,26 @@ ipcMain.handle('navigate-from-start-page', async (event, query) => {
     return { success: true };
   } catch (error) {
     console.error('Ошибка навигации со стартовой страницы:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Открытие страницы истории
+ipcMain.handle('open-history-page', async () => {
+  const activeView = browserViews[appState.activeTabId];
+  if (!activeView) return { success: false, error: 'Нет активной вкладки' };
+  
+  const historyPagePath = path.join(__dirname, 'history.html');
+  try {
+    const historyUrl = url.format({
+      pathname: historyPagePath,
+      protocol: 'file:',
+      slashes: true
+    });
+    await activeView.webContents.loadURL(historyUrl);
+    return { success: true };
+  } catch (error) {
+    console.error('Ошибка при открытии страницы истории:', error);
     return { success: false, error: error.message };
   }
 });
@@ -1040,3 +1181,138 @@ ipcMain.handle('open-download-folder', (event, filePath) => {
     return { success: false, error: error.message };
   }
 });
+
+// Добавляем IPC-обработчики для панели загрузок
+ipcMain.handle('toggle-downloads-panel', (event, isVisible) => {
+  appState.downloadsPanelVisible = isVisible !== undefined ? isVisible : !appState.downloadsPanelVisible;
+  
+  // Добавляем небольшую задержку для синхронизации с CSS-анимацией
+  setTimeout(() => {
+    updateBrowserViewBounds(appState.activeTabId);
+  }, 50);
+  
+  return appState.downloadsPanelVisible;
+});
+
+ipcMain.handle('get-downloads-panel-visible', () => {
+  return appState.downloadsPanelVisible;
+});
+
+// Добавляем IPC-обработчики для цветов
+ipcMain.handle('get-custom-theme', () => {
+  return appState.customTheme;
+});
+
+ipcMain.handle('toggle-custom-theme', (event, enabled) => {
+  appState.customTheme.enabled = enabled;
+  store.set('customTheme.enabled', enabled);
+  return appState.customTheme;
+});
+
+ipcMain.handle('update-custom-theme', (event, theme) => {
+  // Обновляем только переданные свойства
+  if (theme.primaryColor) {
+    appState.customTheme.primaryColor = theme.primaryColor;
+    store.set('customTheme.primaryColor', theme.primaryColor);
+  }
+  if (theme.backgroundColor) {
+    appState.customTheme.backgroundColor = theme.backgroundColor;
+    store.set('customTheme.backgroundColor', theme.backgroundColor);
+  }
+  if (theme.textColor) {
+    appState.customTheme.textColor = theme.textColor;
+    store.set('customTheme.textColor', theme.textColor);
+  }
+  if (theme.headerColor) {
+    appState.customTheme.headerColor = theme.headerColor;
+    store.set('customTheme.headerColor', theme.headerColor);
+  }
+  
+  return appState.customTheme;
+});
+
+ipcMain.handle('reset-custom-theme', () => {
+  // Сбрасываем к значениям по умолчанию
+  appState.customTheme = {
+    enabled: false,
+    primaryColor: '#0060df',
+    backgroundColor: '#f0f0f4',
+    textColor: '#15141a',
+    headerColor: '#f9f9fb'
+  };
+  
+  store.set('customTheme', appState.customTheme);
+  return appState.customTheme;
+});
+
+// Функция для добавления записи в историю просмотра
+function addToHistory(url, title) {
+  // Игнорируем внутренние URL (стартовая страница, настройки и т.д.)
+  if (url.startsWith('file://') || url.startsWith('about:') || url.startsWith('chrome://')) {
+    return;
+  }
+
+  // Создаем запись истории
+  const historyItem = {
+    url,
+    title: title || url,
+    timestamp: Date.now()
+  };
+
+  // Удаляем дубликаты (если есть)
+  appState.history = appState.history.filter(item => item.url !== url);
+  
+  // Добавляем новую запись в начало массива
+  appState.history.unshift(historyItem);
+  
+  // Ограничиваем размер истории (например, 1000 записей)
+  if (appState.history.length > 1000) {
+    appState.history = appState.history.slice(0, 1000);
+  }
+  
+  // Сохраняем историю в store
+  store.set('history', appState.history);
+  
+  // Обновляем топ сайтов
+  updateTopSites();
+}
+
+// Функция для обновления списка популярных сайтов
+function updateTopSites() {
+  // Создаем карту для подсчета посещений
+  const siteVisits = new Map();
+  
+  // Подсчитываем посещения для каждого домена
+  appState.history.forEach(item => {
+    try {
+      const domain = new URL(item.url).hostname;
+      if (!siteVisits.has(domain)) {
+        siteVisits.set(domain, { 
+          url: item.url, 
+          title: item.title, 
+          visits: 1,
+          lastVisit: item.timestamp
+        });
+      } else {
+        const site = siteVisits.get(domain);
+        site.visits += 1;
+        // Обновляем название и URL если это более новое посещение
+        if (item.timestamp > site.lastVisit) {
+          site.title = item.title;
+          site.url = item.url;
+          site.lastVisit = item.timestamp;
+        }
+      }
+    } catch (error) {
+      console.error('Ошибка при обработке URL:', error);
+    }
+  });
+  
+  // Преобразуем карту в массив и сортируем по количеству посещений
+  appState.topSites = Array.from(siteVisits.values())
+    .sort((a, b) => b.visits - a.visits)
+    .slice(0, 12); // Ограничиваем топ 12 сайтами
+  
+  // Сохраняем топ сайтов в store
+  store.set('topSites', appState.topSites);
+}
