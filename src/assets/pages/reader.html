@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Режим чтения | Browzyan</title>
+    <style>
+        :root {
+            --font-size: 18px;
+            --line-height: 1.5;
+            --text-width: 70ch;
+            --background-color: #ffffff;
+            --text-color: #333333;
+            --link-color: #0066cc;
+            --quote-bg: #f9f9f9;
+            --quote-border: #e0e0e0;
+            --code-bg: #f5f5f5;
+        }
+
+        [data-reader-theme="dark"] {
+            --background-color: #1c1c1e;
+            --text-color: #e0e0e0;
+            --link-color: #4d9cff;
+            --quote-bg: #2a2a2c;
+            --quote-border: #3a3a3c;
+            --code-bg: #2a2a2c;
+        }
+
+        [data-reader-theme="sepia"] {
+            --background-color: #f8f1e3;
+            --text-color: #5b4636;
+            --link-color: #0074e8;
+            --quote-bg: #f0e9da;
+            --quote-border: #e0d6c0;
+            --code-bg: #f0e9da;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            font-size: var(--font-size);
+            line-height: var(--line-height);
+            color: var(--text-color);
+            background-color: var(--background-color);
+            margin: 0;
+            padding: 0;
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+
+        .reader-container {
+            max-width: var(--text-width);
+            margin: 0 auto;
+            padding: 50px 20px;
+        }
+
+        .reader-header {
+            margin-bottom: 40px;
+            border-bottom: 1px solid var(--quote-border);
+            padding-bottom: 20px;
+        }
+
+        .reader-title {
+            font-size: 2.2em;
+            font-weight: 600;
+            line-height: 1.3;
+            margin: 0 0 15px 0;
+        }
+
+        .reader-domain {
+            color: #666;
+            font-size: 0.9em;
+            margin-bottom: 10px;
+        }
+
+        .reader-controls {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            background-color: var(--background-color);
+            border: 1px solid var(--quote-border);
+            border-radius: 8px;
+            padding: 12px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .settings-panel {
+            position: fixed;
+            top: 60px;
+            right: 10px;
+            background-color: var(--background-color);
+            border: 1px solid var(--quote-border);
+            border-radius: 8px;
+            padding: 15px;
+            width: 250px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            display: none;
+            z-index: 999;
+        }
+
+        .settings-panel.visible {
+            display: block;
+        }
+
+        .settings-group {
+            margin-bottom: 15px;
+        }
+
+        .settings-title {
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .theme-buttons {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 15px;
+        }
+
+        .theme-button {
+            width: 70px;
+            height: 40px;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid transparent;
+        }
+
+        .theme-button.light {
+            background-color: #ffffff;
+            color: #333333;
+        }
+
+        .theme-button.sepia {
+            background-color: #f8f1e3;
+            color: #5b4636;
+        }
+
+        .theme-button.dark {
+            background-color: #1c1c1e;
+            color: #e0e0e0;
+        }
+
+        .theme-button.active {
+            border-color: #0074e8;
+        }
+
+        .font-controls {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .font-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 6px;
+            background-color: var(--background-color);
+            border: 1px solid var(--quote-border);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+
+        .slider {
+            width: 100%;
+            height: 8px;
+            background-color: var(--quote-border);
+            border-radius: 4px;
+            margin: 10px 0;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background-color: #0074e8;
+            cursor: pointer;
+        }
+
+        /* Стили для контента */
+        .reader-content {
+            font-size: var(--font-size);
+            line-height: var(--line-height);
+        }
+
+        .reader-content h1, 
+        .reader-content h2,
+        .reader-content h3,
+        .reader-content h4,
+        .reader-content h5,
+        .reader-content h6 {
+            line-height: 1.3;
+            margin-top: 1.5em;
+            margin-bottom: 0.5em;
+        }
+
+        .reader-content p {
+            margin: 1em 0;
+        }
+
+        .reader-content a {
+            color: var(--link-color);
+            text-decoration: none;
+        }
+
+        .reader-content a:hover {
+            text-decoration: underline;
+        }
+
+        .reader-content img {
+            max-width: 100%;
+            height: auto;
+            margin: 1em 0;
+            border-radius: 6px;
+        }
+
+        .reader-content blockquote {
+            border-left: 4px solid var(--quote-border);
+            padding-left: 1em;
+            margin-left: 0;
+            background-color: var(--quote-bg);
+            padding: 1em;
+            border-radius: 6px;
+        }
+
+        .reader-content pre, .reader-content code {
+            background-color: var(--code-bg);
+            border-radius: 4px;
+            padding: 0.2em 0.4em;
+            font-family: monospace;
+        }
+
+        .reader-content pre {
+            padding: 1em;
+            overflow-x: auto;
+        }
+
+        .reader-content ul, .reader-content ol {
+            padding-left: 2em;
+        }
+
+        .exit-button {
+            font-size: 16px;
+            padding: 8px 12px;
+            background-color: var(--background-color);
+            border: 1px solid var(--quote-border);
+            border-radius: 6px;
+            cursor: pointer;
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+    <button id="exitReaderBtn" class="exit-button">← Вернуться</button>
+    
+    <button id="settingsBtn" class="reader-controls">⚙️ Настройки</button>
+    
+    <div id="settingsPanel" class="settings-panel">
+        <div class="settings-group">
+            <div class="settings-title">Тема</div>
+            <div class="theme-buttons">
+                <div class="theme-button light" data-theme="light">A</div>
+                <div class="theme-button sepia" data-theme="sepia">A</div>
+                <div class="theme-button dark" data-theme="dark">A</div>
+            </div>
+        </div>
+        
+        <div class="settings-group">
+            <div class="settings-title">Размер шрифта</div>
+            <div class="font-controls">
+                <button class="font-btn" id="decreaseFontBtn">A-</button>
+                <button class="font-btn" id="increaseFontBtn">A+</button>
+            </div>
+        </div>
+        
+        <div class="settings-group">
+            <div class="settings-title">Междустрочный интервал</div>
+            <input type="range" min="1" max="2" step="0.1" value="1.5" class="slider" id="lineHeightSlider">
+        </div>
+        
+        <div class="settings-group">
+            <div class="settings-title">Ширина текста</div>
+            <input type="range" min="40" max="100" value="70" class="slider" id="textWidthSlider">
+        </div>
+    </div>
+    
+    <div class="reader-container">
+        <div class="reader-header">
+            <h1 id="articleTitle" class="reader-title">Загрузка статьи...</h1>
+            <div id="articleDomain" class="reader-domain"></div>
+        </div>
+        
+        <div id="articleContent" class="reader-content">
+            <p>Загрузка содержимого...</p>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            const settingsBtn = document.getElementById('settingsBtn');
+            const settingsPanel = document.getElementById('settingsPanel');
+            const exitReaderBtn = document.getElementById('exitReaderBtn');
+            const articleTitle = document.getElementById('articleTitle');
+            const articleDomain = document.getElementById('articleDomain');
+            const articleContent = document.getElementById('articleContent');
+            
+            // Слайдеры и кнопки
+            const lineHeightSlider = document.getElementById('lineHeightSlider');
+            const textWidthSlider = document.getElementById('textWidthSlider');
+            const increaseFontBtn = document.getElementById('increaseFontBtn');
+            const decreaseFontBtn = document.getElementById('decreaseFontBtn');
+            const themeButtons = document.querySelectorAll('.theme-button');
+            
+            // Получение параметров из URL
+            const hashData = window.location.hash.substring(1);
+            let pageData;
+            
+            try {
+                if (hashData) {
+                    pageData = JSON.parse(decodeURIComponent(hashData));
+                    
+                    // Устанавливаем информацию о статье
+                    articleTitle.textContent = pageData.title || 'Без названия';
+                    articleDomain.textContent = pageData.domain || '';
+                    
+                    // Запрашиваем содержимое через API
+                    if (pageData.contentId && window.api) {
+                        window.api.reader.getContent(pageData.contentId)
+                            .then(html => {
+                                if (html) {
+                                    processContent(html);
+                                } else {
+                                    articleContent.innerHTML = '<p>Не удалось загрузить содержимое.</p>';
+                                }
+                            })
+                            .catch(error => {
+                                console.error('Ошибка при получении контента:', error);
+                                articleContent.innerHTML = '<p>Ошибка при загрузке содержимого.</p>';
+                            });
+                    }
+                    
+                    // Применяем сохраненные настройки
+                    if (pageData.settings) {
+                        applySettings(pageData.settings);
+                    }
+                }
+            } catch (error) {
+                console.error('Ошибка при обработке данных из URL:', error);
+            }
+            
+            // Обработка содержимого страницы
+            function processContent(html) {
+                try {
+                    // Создаем парсер для анализа HTML
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(html, 'text/html');
+                    
+                    // Создаем экземпляр Readability и парсим содержимое
+                    // Используем API-вызов или внешнюю библиотеку
+                    // Для простоты в примере мы просто извлечем основной контент
+                    let content = extractMainContent(doc);
+                    
+                    // Устанавливаем содержимое
+                    articleContent.innerHTML = content;
+                } catch (error) {
+                    console.error('Ошибка при обработке содержимого:', error);
+                    articleContent.innerHTML = '<p>Ошибка при обработке содержимого.</p>';
+                }
+            }
+            
+            // Простая функция для извлечения основного контента (упрощенно)
+            function extractMainContent(doc) {
+                // Это очень упрощенная версия, в реальности используйте Readability или аналоги
+                const article = doc.querySelector('article');
+                if (article) return article.innerHTML;
+                
+                const main = doc.querySelector('main');
+                if (main) return main.innerHTML;
+                
+                // Подходящих контейнеров не найдено, возвращаем весь body
+                return doc.body.innerHTML;
+            }
+            
+            // Функция применения настроек
+            function applySettings(settings) {
+                // Применяем размер шрифта
+                if (settings.fontSize) {
+                    document.documentElement.style.setProperty('--font-size', `${settings.fontSize}px`);
+                }
+                
+                // Применяем высоту строки
+                if (settings.lineHeight) {
+                    document.documentElement.style.setProperty('--line-height', settings.lineHeight);
+                    lineHeightSlider.value = settings.lineHeight;
+                }
+                
+                // Применяем ширину текста
+                if (settings.lineWidth) {
+                    document.documentElement.style.setProperty('--text-width', `${settings.lineWidth}ch`);
+                    textWidthSlider.value = settings.lineWidth;
+                }
+                
+                // Применяем тему
+                if (settings.theme) {
+                    document.body.setAttribute('data-reader-theme', settings.theme);
+                    // Активируем соответствующую кнопку
+                    themeButtons.forEach(btn => {
+                        if (btn.dataset.theme === settings.theme) {
+                            btn.classList.add('active');
+                        } else {
+                            btn.classList.remove('active');
+                        }
+                    });
+                }
+            }
+            
+            // Сохранение настроек
+            function saveSettings() {
+                if (!window.api || !window.api.reader) return;
+                
+                const settings = {
+                    fontSize: parseInt(getComputedStyle(document.documentElement).getPropertyValue('--font-size')),
+                    lineHeight: parseFloat(lineHeightSlider.value),
+                    lineWidth: parseInt(textWidthSlider.value),
+                    theme: document.body.getAttribute('data-reader-theme') || 'light'
+                };
+                
+                window.api.reader.saveSettings(settings)
+                    .catch(error => console.error('Ошибка при сохранении настроек:', error));
+            }
+            
+            // Обработчики событий
+            
+            // Показать/скрыть панель настроек
+            settingsBtn.addEventListener('click', () => {
+                settingsPanel.classList.toggle('visible');
+            });
+            
+            // Выход из режима чтения
+            exitReaderBtn.addEventListener('click', () => {
+                if (window.api && window.api.reader) {
+                    window.api.reader.exitReaderMode()
+                        .catch(error => console.error('Ошибка при выходе из режима чтения:', error));
+                } else {
+                    window.history.back();
+                }
+            });
+            
+            // Изменение размера шрифта
+            increaseFontBtn.addEventListener('click', () => {
+                const currentSize = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--font-size'));
+                const newSize = Math.min(currentSize + 2, 32); // Максимум 32px
+                document.documentElement.style.setProperty('--font-size', `${newSize}px`);
+                saveSettings();
+            });
+            
+            decreaseFontBtn.addEventListener('click', () => {
+                const currentSize = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--font-size'));
+                const newSize = Math.max(currentSize - 2, 12); // Минимум 12px
+                document.documentElement.style.setProperty('--font-size', `${newSize}px`);
+                saveSettings();
+            });
+            
+            // Изменение высоты строки
+            lineHeightSlider.addEventListener('input', () => {
+                document.documentElement.style.setProperty('--line-height', lineHeightSlider.value);
+            });
+            
+            lineHeightSlider.addEventListener('change', saveSettings);
+            
+            // Изменение ширины текста
+            textWidthSlider.addEventListener('input', () => {
+                document.documentElement.style.setProperty('--text-width', `${textWidthSlider.value}ch`);
+            });
+            
+            textWidthSlider.addEventListener('change', saveSettings);
+            
+            // Выбор темы
+            themeButtons.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    // Устанавливаем тему
+                    document.body.setAttribute('data-reader-theme', btn.dataset.theme);
+                    
+                    // Обновляем активную кнопку
+                    themeButtons.forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    
+                    saveSettings();
+                });
+            });
+            
+            // Устанавливаем светлую тему по умолчанию
+            if (!document.body.hasAttribute('data-reader-theme')) {
+                document.body.setAttribute('data-reader-theme', 'light');
+                themeButtons[0].classList.add('active');
+            }
+        })();
+    </script>
+</body>
+</html> 

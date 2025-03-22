@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Новая вкладка - Browzyan</title>
+    <style>
+        :root {
+            --primary-color: #4a86e8;
+            --background-color: #f9f9fa;
+            --card-color: #ffffff;
+            --text-color: #333333;
+            --accent-color: #7e57c2;
+            --border-color: #e0e0e0;
+            --hover-color: #f0f0f0;
+        }
+
+        [data-theme="dark"] {
+            --background-color: #2a2a2e;
+            --card-color: #38383d;
+            --text-color: #f9f9fa;
+            --border-color: #4a4a4f;
+            --hover-color: #4a4a4f;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+        }
+
+        body {
+            background-color: var(--background-color);
+            color: var(--text-color);
+            height: 100vh;
+            overflow-y: auto;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+            font-weight: 500;
+        }
+
+        .search-container {
+            display: flex;
+            max-width: 600px;
+            margin: 0 auto 40px;
+        }
+
+        .search-input {
+            flex: 1;
+            padding: 12px 16px;
+            font-size: 16px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px 0 0 6px;
+            background-color: var(--card-color);
+            color: var(--text-color);
+        }
+
+        .search-button {
+            padding: 12px 20px;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 0 6px 6px 0;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        .top-sites {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+
+        .site-card {
+            background-color: var(--card-color);
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            border: 1px solid var(--border-color);
+            transition: transform 0.2s;
+            cursor: pointer;
+            height: 120px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .site-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .site-icon {
+            width: 48px;
+            height: 48px;
+            margin-bottom: 12px;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: var(--primary-color);
+            color: white;
+            font-weight: bold;
+            font-size: 20px;
+        }
+
+        .site-name {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            width: 100%;
+            font-size: 14px;
+        }
+
+        .recents {
+            background-color: var(--card-color);
+            border-radius: 8px;
+            padding: 20px;
+            border: 1px solid var(--border-color);
+        }
+
+        .recents h2 {
+            margin-bottom: 16px;
+            font-size: 18px;
+            font-weight: 500;
+        }
+
+        .recents-list {
+            list-style: none;
+        }
+
+        .recent-item {
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+        }
+
+        .recent-item:last-child {
+            border-bottom: none;
+        }
+
+        .recent-icon {
+            width: 20px;
+            height: 20px;
+            margin-right: 12px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: var(--primary-color);
+            color: white;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+
+        .recent-title {
+            flex: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .recent-link {
+            color: var(--text-color);
+            text-decoration: none;
+        }
+
+        .recent-link:hover {
+            text-decoration: underline;
+        }
+
+        .recent-time {
+            color: #888888;
+            font-size: 12px;
+            margin-left: 12px;
+        }
+
+        @media (max-width: 768px) {
+            .top-sites {
+                grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Browzyan Browser</h1>
+        </header>
+
+        <div class="search-container">
+            <input type="text" class="search-input" placeholder="Поиск в интернете или ввод адреса" id="searchInput">
+            <button class="search-button" id="searchButton">Поиск</button>
+        </div>
+
+        <div class="top-sites" id="topSites">
+            <!-- Здесь будут отображаться часто посещаемые сайты -->
+        </div>
+
+        <div class="recents">
+            <h2>Недавние страницы</h2>
+            <ul class="recents-list" id="recentsList">
+                <!-- Здесь будут отображаться недавно посещённые страницы -->
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        // Получаем тему из системы
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                // Получаем состояние темы из основного процесса
+                const isDarkMode = await window.browzyanAPI.theme.getTheme() === 'dark';
+                document.body.setAttribute('data-theme', isDarkMode ? 'dark' : 'light');
+                
+                // Загружаем часто посещаемые сайты
+                const topSites = await window.browzyanAPI.history.getTopSites();
+                renderTopSites(topSites);
+                
+                // Загружаем недавнюю историю
+                const recentHistory = await window.browzyanAPI.history.getRecentHistory();
+                renderRecentHistory(recentHistory);
+                
+                // Обработчик поиска
+                document.getElementById('searchButton').addEventListener('click', handleSearch);
+                document.getElementById('searchInput').addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        handleSearch();
+                    }
+                });
+            } catch (error) {
+                console.error('Ошибка при инициализации страницы новой вкладки:', error);
+            }
+        });
+        
+        // Функция для обработки поиска
+        function handleSearch() {
+            const input = document.getElementById('searchInput').value.trim();
+            if (input) {
+                window.browzyanAPI.navigation.navigateFromSearch(input);
+            }
+        }
+        
+        // Функция для отображения часто посещаемых сайтов
+        function renderTopSites(sites = []) {
+            const container = document.getElementById('topSites');
+            container.innerHTML = '';
+            
+            if (sites.length === 0) {
+                // Добавляем заглушки, если нет данных
+                for (let i = 0; i < 8; i++) {
+                    const card = createSiteCard({ url: '#', title: 'Новый сайт', favicon: null });
+                    container.appendChild(card);
+                }
+                return;
+            }
+            
+            sites.forEach(site => {
+                const card = createSiteCard(site);
+                container.appendChild(card);
+            });
+        }
+        
+        // Функция для создания карточки сайта
+        function createSiteCard(site) {
+            const card = document.createElement('div');
+            card.className = 'site-card';
+            card.addEventListener('click', () => navigateTo(site.url));
+            
+            const icon = document.createElement('div');
+            icon.className = 'site-icon';
+            // Если есть иконка, используем её, иначе - первую букву заголовка
+            icon.textContent = site.title.charAt(0).toUpperCase();
+            
+            const name = document.createElement('div');
+            name.className = 'site-name';
+            name.textContent = site.title;
+            
+            card.appendChild(icon);
+            card.appendChild(name);
+            
+            return card;
+        }
+        
+        // Функция для отображения недавней истории
+        function renderRecentHistory(history = []) {
+            const container = document.getElementById('recentsList');
+            container.innerHTML = '';
+            
+            if (history.length === 0) {
+                const emptyItem = document.createElement('li');
+                emptyItem.className = 'recent-item';
+                emptyItem.textContent = 'История отсутствует';
+                container.appendChild(emptyItem);
+                return;
+            }
+            
+            history.slice(0, 10).forEach(item => {
+                const listItem = createHistoryItem(item);
+                container.appendChild(listItem);
+            });
+        }
+        
+        // Функция для создания элемента истории
+        function createHistoryItem(item) {
+            const listItem = document.createElement('li');
+            listItem.className = 'recent-item';
+            
+            const icon = document.createElement('div');
+            icon.className = 'recent-icon';
+            icon.textContent = item.title.charAt(0).toUpperCase();
+            
+            const title = document.createElement('div');
+            title.className = 'recent-title';
+            
+            const link = document.createElement('a');
+            link.className = 'recent-link';
+            link.href = '#';
+            link.textContent = item.title;
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                navigateTo(item.url);
+            });
+            
+            title.appendChild(link);
+            
+            const time = document.createElement('div');
+            time.className = 'recent-time';
+            time.textContent = formatTime(item.timestamp);
+            
+            listItem.appendChild(icon);
+            listItem.appendChild(title);
+            listItem.appendChild(time);
+            
+            return listItem;
+        }
+        
+        // Функция для форматирования времени
+        function formatTime(timestamp) {
+            const date = new Date(timestamp);
+            const now = new Date();
+            
+            const diffMs = now - date;
+            const diffMins = Math.floor(diffMs / 60000);
+            const diffHours = Math.floor(diffMins / 60);
+            const diffDays = Math.floor(diffHours / 24);
+            
+            if (diffMins < 1) {
+                return 'только что';
+            } else if (diffMins < 60) {
+                return `${diffMins} мин. назад`;
+            } else if (diffHours < 24) {
+                return `${diffHours} ч. назад`;
+            } else if (diffDays < 7) {
+                return `${diffDays} д. назад`;
+            } else {
+                return date.toLocaleDateString();
+            }
+        }
+        
+        // Функция для навигации
+        function navigateTo(url) {
+            window.browzyanAPI.navigation.navigateTo(url);
+        }
+    </script>
+</body>
+</html> 

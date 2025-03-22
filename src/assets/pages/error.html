@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ошибка | Browzyan</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f9f9fb;
+            margin: 0;
+            padding: 0;
+            color: #15141a;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .dark-mode {
+            background-color: #1c1b22;
+            color: #f9f9fa;
+        }
+        
+        .container {
+            max-width: 600px;
+            padding: 2rem;
+            text-align: center;
+        }
+        
+        .error-icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            color: #d70022;
+        }
+        
+        .error-title {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+        }
+        
+        .error-message {
+            font-size: 1.1rem;
+            margin-bottom: 2rem;
+            line-height: 1.5;
+            color: #5c5c61;
+        }
+        
+        .dark-mode .error-message {
+            color: #b1b1b3;
+        }
+        
+        .error-code {
+            font-family: monospace;
+            background-color: #f0f0f4;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            margin-bottom: 2rem;
+            display: inline-block;
+        }
+        
+        .dark-mode .error-code {
+            background-color: #38383d;
+        }
+        
+        .action-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+        }
+        
+        button {
+            padding: 0.8rem 1.5rem;
+            border-radius: 4px;
+            border: none;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        
+        .primary-button {
+            background-color: #0060df;
+            color: white;
+        }
+        
+        .primary-button:hover {
+            background-color: #0a84ff;
+        }
+        
+        .secondary-button {
+            background-color: #e0e0e6;
+            color: #15141a;
+        }
+        
+        .secondary-button:hover {
+            background-color: #d7d7db;
+        }
+        
+        .dark-mode .secondary-button {
+            background-color: #38383d;
+            color: #f9f9fa;
+        }
+        
+        .dark-mode .secondary-button:hover {
+            background-color: #4a4a4f;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="error-icon">⚠️</div>
+        <h1 class="error-title">Не удалось загрузить страницу</h1>
+        <p class="error-message" id="errorMessage">
+            Произошла ошибка при попытке загрузить запрошенную страницу. Проверьте соединение с интернетом или попробуйте позже.
+        </p>
+        <div class="error-code" id="errorCode">ERR_UNKNOWN</div>
+        
+        <div class="action-buttons">
+            <button class="secondary-button" id="backButton">Назад</button>
+            <button class="primary-button" id="reloadButton">Обновить</button>
+        </div>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Получаем параметры ошибки из URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const errorCode = urlParams.get('code') || 'ERR_UNKNOWN';
+            const errorUrl = urlParams.get('url') || '';
+            
+            // Устанавливаем код ошибки
+            const errorCodeElement = document.getElementById('errorCode');
+            errorCodeElement.textContent = errorCode;
+            
+            // Формируем сообщение об ошибке в зависимости от кода
+            const errorMessageElement = document.getElementById('errorMessage');
+            let message = 'Произошла ошибка при попытке загрузить запрошенную страницу.';
+            
+            switch (errorCode) {
+                case 'ERR_CONNECTION_REFUSED':
+                    message = 'Не удалось установить соединение с сервером. Возможно, сервер недоступен или ваше интернет-соединение имеет проблемы.';
+                    break;
+                case 'ERR_INTERNET_DISCONNECTED':
+                    message = 'Отсутствует подключение к интернету. Проверьте ваше соединение и попробуйте снова.';
+                    break;
+                case 'ERR_NAME_NOT_RESOLVED':
+                    message = 'Не удалось найти DNS-запись для этого адреса. Проверьте правильность ввода URL.';
+                    break;
+                case 'ERR_TIMED_OUT':
+                    message = 'Время ожидания ответа от сервера истекло. Попробуйте обновить страницу или проверьте скорость вашего интернета.';
+                    break;
+                case 'ERR_FILE_NOT_FOUND':
+                    message = 'Запрошенный файл не найден на сервере.';
+                    break;
+                case 'ERR_TOO_MANY_REDIRECTS':
+                    message = 'Слишком много перенаправлений. Возможно, проблема на стороне сервера.';
+                    break;
+                case 'ERR_BLOCKED_BY_CLIENT':
+                    message = 'Доступ к ресурсу заблокирован настройками безопасности браузера.';
+                    break;
+            }
+            
+            if (errorUrl) {
+                message += `<br><br>URL: <code>${errorUrl}</code>`;
+            }
+            
+            errorMessageElement.innerHTML = message;
+            
+            // Обработчики кнопок
+            const backButton = document.getElementById('backButton');
+            backButton.addEventListener('click', () => {
+                if (window.browzyanAPI && window.browzyanAPI.navigation) {
+                    window.browzyanAPI.navigation.goBack();
+                } else {
+                    window.history.back();
+                }
+            });
+            
+            const reloadButton = document.getElementById('reloadButton');
+            reloadButton.addEventListener('click', () => {
+                if (window.browzyanAPI && window.browzyanAPI.navigation) {
+                    window.browzyanAPI.navigation.reload();
+                } else if (errorUrl) {
+                    window.location.href = errorUrl;
+                } else {
+                    window.location.reload();
+                }
+            });
+            
+            // Проверяем тему и применяем нужный режим
+            if (window.browzyanAPI && window.browzyanAPI.theme) {
+                window.browzyanAPI.theme.getTheme().then(theme => {
+                    if (theme === 'dark') {
+                        document.body.classList.add('dark-mode');
+                    }
+                }).catch(err => console.error('Ошибка при получении темы:', err));
+            }
+        });
+    </script>
+</body>
+</html> 

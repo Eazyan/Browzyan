@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Новая вкладка | Browzyan</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f9f9fb;
+            margin: 0;
+            padding: 0;
+            color: #15141a;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .dark-mode {
+            background-color: #1c1b22;
+            color: #f9f9fa;
+        }
+        
+        .container {
+            max-width: 800px;
+            width: 90%;
+            text-align: center;
+        }
+        
+        .logo {
+            font-size: 3rem;
+            margin-bottom: 2rem;
+            font-weight: bold;
+            color: #0060df;
+        }
+        
+        .search-box {
+            width: 100%;
+            position: relative;
+            margin-bottom: 3rem;
+        }
+        
+        .search-input {
+            width: 100%;
+            padding: 1rem 1.5rem;
+            font-size: 1.2rem;
+            border: 1px solid #d7d7db;
+            border-radius: 2rem;
+            outline: none;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+            transition: box-shadow 0.3s, border-color 0.3s;
+        }
+        
+        .search-input:focus {
+            border-color: #0060df;
+            box-shadow: 0 0 0 2px rgba(0, 96, 223, 0.3);
+        }
+        
+        .dark-mode .search-input {
+            background-color: #38383d;
+            border-color: #4a4a4f;
+            color: #f9f9fa;
+        }
+        
+        .search-button {
+            position: absolute;
+            right: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            background-color: #0060df;
+            border: none;
+            color: white;
+            width: 2.5rem;
+            height: 2.5rem;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        
+        .search-button:hover {
+            background-color: #0a84ff;
+        }
+        
+        .top-sites {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 3rem;
+        }
+        
+        .site-item {
+            text-decoration: none;
+            color: inherit;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            transition: background-color 0.3s;
+        }
+        
+        .site-item:hover {
+            background-color: rgba(0, 0, 0, 0.05);
+        }
+        
+        .dark-mode .site-item:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+        
+        .site-icon {
+            width: 3rem;
+            height: 3rem;
+            border-radius: 0.5rem;
+            background-color: #e0e0e6;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 0.8rem;
+            font-size: 1.5rem;
+            overflow: hidden;
+        }
+        
+        .site-icon img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .site-name {
+            font-size: 0.9rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            width: 100%;
+            text-align: center;
+        }
+        
+        .footer {
+            margin-top: auto;
+            padding: 1rem;
+            font-size: 0.8rem;
+            color: #737373;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">Browzyan</div>
+        
+        <div class="search-box">
+            <form id="searchForm">
+                <input type="text" id="searchInput" class="search-input" placeholder="Поиск в интернете или ввод адреса" autofocus>
+                <button type="submit" class="search-button">→</button>
+            </form>
+        </div>
+        
+        <div class="top-sites" id="topSites">
+            <!-- Популярные сайты будут добавляться динамически -->
+        </div>
+    </div>
+    
+    <div class="footer">
+        Browzyan Browser v0.0.2
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Проверяем тему и применяем нужный режим
+            if (window.browzyanAPI) {
+                window.browzyanAPI.theme.getTheme().then(theme => {
+                    if (theme === 'dark') {
+                        document.body.classList.add('dark-mode');
+                    }
+                }).catch(err => console.error('Ошибка при получении темы:', err));
+                
+                // Загружаем популярные сайты
+                window.browzyanAPI.history.getTopSites().then(sites => {
+                    renderTopSites(sites);
+                }).catch(err => console.error('Ошибка при получении популярных сайтов:', err));
+            }
+            
+            // Форма поиска
+            const searchForm = document.getElementById('searchForm');
+            searchForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const searchInput = document.getElementById('searchInput');
+                const query = searchInput.value.trim();
+                
+                if (query) {
+                    if (window.browzyanAPI) {
+                        // Используем API для навигации
+                        window.browzyanAPI.navigation.navigateTo(query);
+                    } else {
+                        // Запасной вариант
+                        window.location.href = `https://yandex.ru/search/?text=${encodeURIComponent(query)}`;
+                    }
+                }
+            });
+        });
+        
+        // Функция для отображения популярных сайтов
+        function renderTopSites(sites = []) {
+            const topSitesContainer = document.getElementById('topSites');
+            topSitesContainer.innerHTML = '';
+            
+            // Если сайтов нет, добавляем несколько стандартных
+            if (!sites || sites.length === 0) {
+                sites = [
+                    { url: 'https://yandex.ru', title: 'Яндекс', favicon: '' },
+                    { url: 'https://mail.ru', title: 'Mail.ru', favicon: '' },
+                    { url: 'https://vk.com', title: 'ВКонтакте', favicon: '' },
+                    { url: 'https://youtube.com', title: 'YouTube', favicon: '' },
+                    { url: 'https://wikipedia.org', title: 'Википедия', favicon: '' },
+                    { url: 'https://github.com', title: 'GitHub', favicon: '' }
+                ];
+            }
+            
+            // Ограничиваем количество сайтов для отображения
+            const sitesToShow = sites.slice(0, 12);
+            
+            sitesToShow.forEach(site => {
+                const siteItem = document.createElement('a');
+                siteItem.href = site.url;
+                siteItem.className = 'site-item';
+                siteItem.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    if (window.browzyanAPI) {
+                        window.browzyanAPI.navigation.navigateTo(site.url);
+                    } else {
+                        window.location.href = site.url;
+                    }
+                });
+                
+                const siteIcon = document.createElement('div');
+                siteIcon.className = 'site-icon';
+                
+                if (site.favicon) {
+                    const img = document.createElement('img');
+                    img.src = site.favicon;
+                    img.alt = site.title;
+                    siteIcon.appendChild(img);
+                } else {
+                    siteIcon.textContent = site.title.charAt(0).toUpperCase();
+                }
+                
+                const siteName = document.createElement('div');
+                siteName.className = 'site-name';
+                siteName.textContent = site.title;
+                
+                siteItem.appendChild(siteIcon);
+                siteItem.appendChild(siteName);
+                topSitesContainer.appendChild(siteItem);
+            });
+        }
+    </script>
+</body>
+</html> 
